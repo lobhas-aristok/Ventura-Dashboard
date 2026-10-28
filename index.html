@@ -24,6 +24,7 @@ body{font-family:"Segoe UI",Inter,Arial,sans-serif;background:var(--page);color:
 #loadmsg.ok{display:block;background:#e9f8ef;border:1px solid #a8dcbc}
 #loadmsg.err{display:block;background:#fdeceb;border:1px solid #f2b3ae}
 #loadmsg.busy{display:block;background:#eef4ff;border:1px solid #bcd4fa}
+#dqwarn{margin-bottom:12px;padding:10px 14px;border-radius:10px;font-size:12px;line-height:1.55;background:#fff6e0;border:1px solid #f0c96a}
 #loadmsg .x{float:right;cursor:pointer;font-weight:700;margin-left:10px}
 .filters{padding:12px 14px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
 .filters label{font-size:11px;font-weight:700;color:var(--muted);display:block;max-width:100%}
@@ -98,6 +99,7 @@ details .body ul{margin:4px 0 8px 18px;padding:0}
 <div class="wrap">
 
 <div id="loadmsg"></div>
+<div id="dqwarn" class="hide"></div>
 
 <div class="card filters">
   <label>Date range
@@ -133,7 +135,7 @@ details .body ul{margin:4px 0 8px 18px;padding:0}
       <select id="fscale"><option value="true">True scale (Impressions = 100%)</option><option value="log">Readable scale</option></select>
     </div>
     <div id="funnel"></div>
-    <div class="note" style="margin-top:8px">Click a stage to rank the breakdown and table by that metric. Installs, E-Signs and Account Opens are counted on the day they happen, so stages are not a strict single-user path.</div>
+    <div class="note" style="margin-top:8px">Click a stage to rank the breakdown and table by that metric. Installs, Leads and Account Opens are counted on the day they happen, so stages are not a strict single-user path.</div>
   </div>
 
   <div class="card panel" id="p7">
@@ -201,14 +203,14 @@ const $ = id => document.getElementById(id);
 /* Paste the Apps Script web app URL (ends in /exec) between the quotes. */
 const DATA_URL = 'https://script.google.com/macros/s/AKfycbyYzxnOIe-6iqg-nRYCuH8ofammP4RNi-1ZQA6L2PU1iLZKnTWFPoV_DP9hS8OVcwA/exec';
 const DEFAULT_PERIOD = 'yesterday';           // 'yesterday' = latest day in the sheet
-/* Ratios are plain divisions (e.g. Clicks / Impressions).
-   'decimal' shows the raw result (0.0286); 'percent' shows it ×100 with a % sign (2.86%). */
-const RATIO_DISPLAY = 'decimal';
-const RATIO_DECIMALS = 4;
+/* Ratios are divisions (e.g. Clicks / Impressions).
+   'percent' shows them ×100 with a % sign (2.86%); 'decimal' shows the raw result (0.0286). */
+const RATIO_DISPLAY = 'percent';
+const RATIO_DECIMALS = 2;
 /* Exact header names in row 1 of the sheet tab. */
 const COL = {
   day: 'Day', campaign: 'Campaign Name', channel: 'Channel', objective: 'Objective', type: 'Campaign Type',
-  impressions: 'Impressions', clicks: 'Clicks', spend: 'Amount Spent', installs: 'Installs', esign: 'E-Sign', ao: 'Account Open'
+  impressions: 'Impressions', clicks: 'Clicks', spend: 'Amount Spent', installs: 'Installs', leads: 'Leads', ao: 'Account Open'
 };
 /* ===================================================================================== */
 
@@ -228,14 +230,42 @@ const daysInMonth = s => new Date(Date.UTC(+s.slice(0, 4), +s.slice(5, 7), 0)).g
 const pad2 = n => String(n).padStart(2, '0');
 
 function serialToISO(n){ return new Date(Date.UTC(1899, 11, 30) + Math.floor(n) * DAY).toISOString().slice(0, 10); }
-function toISO(v){
-  if (typeof v === 'number' && v > 20000 && v < 90000) return serialToISO(v);   // real date cell (serial number)
+const MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, sept:9, oct:10, nov:11, dec:12 };
+let DATE_ORDER = 'DMY';   // set per dataset by detectDateOrder(); India / UK sheets use DD/MM/YYYY
+function ymd(y, mo, d) {
+  y = +y; mo = +mo; d = +d;
+  if (y < 100) y += 2000;
+  if (!(mo >= 1 && mo <= 12 && d >= 1 && d <= 31 && y >= 2000 && y <= 2100)) return null;
+  const t = new Date(Date.UTC(y, mo - 1, d));
+  if (t.getUTCFullYear() !== y || t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== d) return null;   // rejects 31/02 etc.
+  return y + '-' + pad2(mo) + '-' + pad2(d);
+}
+const monNum = w => MONTHS[String(w).toLowerCase().slice(0, String(w).toLowerCase().startsWith('sept') ? 4 : 3)] || null;
+/* Looks at every text date like 05/10/2026 and decides DD/MM vs MM/DD from values where one part is > 12. */
+function detectDateOrder(values) {
+  let dmy = 0, mdy = 0;
+  values.forEach(v => {
+    if (typeof v !== 'string') return;
+    const m = /^\s*(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\s*$/.exec(v);
+    if (!m) return;
+    const a = +m[1], b = +m[2];
+    if (a > 12 && b <= 12) dmy++; else if (b > 12 && a <= 12) mdy++;
+  });
+  return { order: mdy > dmy ? 'MDY' : 'DMY', dmy, mdy };
+}
+function toISO(v) {
+  if (typeof v === 'number') return (v > 20000 && v < 90000) ? serialToISO(v) : null;   // date cell sent as serial number
+  if (v instanceof Date) return isNaN(v) ? null : v.toISOString().slice(0, 10);
   if (typeof v !== 'string') return null;
-  const s = v.trim();
-  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);                                    // 2025-11-01
-  if (m) return m[1] + '-' + m[2] + '-' + m[3];
-  m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/.exec(s);                       // 01/11/2025 = DD/MM/YYYY
-  if (m) { const d = +m[1], mo = +m[2]; if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) return m[3] + '-' + pad2(mo) + '-' + pad2(d); }
+  const s = v.trim().replace(/\s+/g, ' ');
+  if (!s) return null;
+  let m;
+  if ((m = /^(\d{4})[\-\/.](\d{1,2})[\-\/.](\d{1,2})(?:[ T].*)?$/.exec(s))) return ymd(m[1], m[2], m[3]);                    // 2026-10-06
+  if ((m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?: .*)?$/.exec(s)))                                                   // 06/10/2026, 6-10-26
+    return DATE_ORDER === 'MDY' ? ymd(m[3], m[1], m[2]) : ymd(m[3], m[2], m[1]);
+  if ((m = /^(\d{1,2})(?:st|nd|rd|th)?[ \-\/]([A-Za-z]{3,9})[ \-\/,]+(\d{2,4})$/.exec(s)) && monNum(m[2])) return ymd(m[3], monNum(m[2]), m[1]);   // 6-Oct-2026
+  if ((m = /^([A-Za-z]{3,9}) (\d{1,2})(?:st|nd|rd|th)?,? (\d{4})$/.exec(s)) && monNum(m[1])) return ymd(m[3], monNum(m[1]), m[2]);                // Oct 6, 2026
+  if ((m = /^[A-Za-z]{3},? ([A-Za-z]{3}) (\d{1,2}) (\d{4})/.exec(s)) && monNum(m[1])) return ymd(m[3], monNum(m[1]), m[2]);                         // Tue Oct 06 2026 ...
   return null;
 }
 
@@ -246,7 +276,9 @@ function ingest(table, srcName){
   const missing = REQUIRED.filter(c => !(c in idx));
   if (missing.length) throw new Error('These required columns were not found: ' + missing.join(', ') + '. Row 1 of the sheet tab must contain these exact headers.');
   const g = (r, n) => r[idx[n]];
-  const M = { rows: 0, skippedDate: 0, blankName: 0, unmappedRows: 0, errRows: 0, nonNumeric: {}, nonNumericTotal: 0, negatives: 0, dupPairs: 0,
+  const det = detectDateOrder(table.rows.map(r => r[idx[COL.day]]));
+  DATE_ORDER = det.order;
+  const M = { dateOrder: det, skippedSamples: [], skippedBlank: 0, rows: 0, skippedDate: 0, blankName: 0, unmappedRows: 0, errRows: 0, nonNumeric: {}, nonNumericCells: {}, nonNumericTotal: 0, negatives: 0, dupPairs: 0,
     zeroSpendConv: 0, zeroSpendConvByCh: {}, unmappedCampaigns: new Set(), srcName: srcName || '' };
   const rows = [], seen = {}, dupKeys = new Set();
   const dimOf = v => {
@@ -262,23 +294,31 @@ function ingest(table, srcName){
     if (s === '' || s === '-') return 0;
     const f = Number(s);
     if (isFinite(f)) { if (f < 0) M.negatives++; return f; }
-    M.nonNumeric[col] = (M.nonNumeric[col] || 0) + 1; M.nonNumericTotal++; return 0;
+    M.nonNumeric[col] = (M.nonNumeric[col] || 0) + 1; M.nonNumericTotal++; if (!(col in M.nonNumericCells)) M.nonNumericCells[col] = String(v); return 0;
   };
   for (const r of table.rows) {
     const day = toISO(g(r, COL.day));
-    if (!day) { M.skippedDate++; continue; }
+    if (!day) {
+      const raw = g(r, COL.day);
+      const empty = raw == null || String(raw).trim() === '';
+      const hasNumbers = [COL.impressions, COL.clicks, COL.spend, COL.installs, COL.leads, COL.ao].some(c => { const x = g(r, c); return x !== '' && x != null && Number(String(x).replace(/[,₹\s]/g, '')) !== 0; });
+      if (empty && !hasNumbers) { M.skippedBlank++; continue; }       // genuinely empty row
+      M.skippedDate++;
+      if (M.skippedSamples.length < 6) M.skippedSamples.push(String(raw));
+      continue;
+    }
     let name = g(r, COL.campaign); name = name == null || String(name).trim() === '' ? null : String(name).trim();
     const ch = dimOf(g(r, COL.channel)), ob = dimOf(g(r, COL.objective)), ty = dimOf(g(r, COL.type));
     const rec = {
       Day: day, Campaign: name || BLANKNAME,
       Channel: ch && ch !== '#ERR' ? ch : UNMAPPED, Objective: ob && ob !== '#ERR' ? ob : UNMAPPED, Type: ty && ty !== '#ERR' ? ty : UNMAPPED,
       Impressions: numOf(g(r, COL.impressions), COL.impressions), Clicks: numOf(g(r, COL.clicks), COL.clicks), Spend: numOf(g(r, COL.spend), COL.spend),
-      Installs: numOf(g(r, COL.installs), COL.installs), ESign: numOf(g(r, COL.esign), COL.esign), AO: numOf(g(r, COL.ao), COL.ao)
+      Installs: numOf(g(r, COL.installs), COL.installs), Leads: numOf(g(r, COL.leads), COL.leads), AO: numOf(g(r, COL.ao), COL.ao)
     };
     if (!name) M.blankName++;
     if (rec.Channel === UNMAPPED || rec.Objective === UNMAPPED || rec.Type === UNMAPPED) { M.unmappedRows++; if (name) M.unmappedCampaigns.add(name); }
     if (ch === '#ERR' || ob === '#ERR' || ty === '#ERR') M.errRows++;
-    if (rec.Spend === 0 && (rec.Installs + rec.ESign + rec.AO) > 0) { M.zeroSpendConv++; M.zeroSpendConvByCh[rec.Channel] = (M.zeroSpendConvByCh[rec.Channel] || 0) + 1; }
+    if (rec.Spend === 0 && (rec.Installs + rec.Leads + rec.AO) > 0) { M.zeroSpendConv++; M.zeroSpendConvByCh[rec.Channel] = (M.zeroSpendConvByCh[rec.Channel] || 0) + 1; }
     const k = day + '|' + rec.Channel + '|' + rec.Campaign; if (seen[k]) dupKeys.add(k); seen[k] = 1;
     rows.push(rec);
   }
@@ -290,6 +330,8 @@ function ingest(table, srcName){
   M.totals = agg(rows);
   const byCh = {}; rows.forEach(r => byCh[r.Channel] = (byCh[r.Channel] || 0) + r.Spend);
   M.byChannel = byCh; M.unmappedCampaigns = [...M.unmappedCampaigns].sort();
+  const byMonth = {}; rows.forEach(r => { const k = r.Day.slice(0, 7); (byMonth[k] = byMonth[k] || { rows: 0, Spend: 0, Installs: 0, AO: 0, days: new Set() }); const b = byMonth[k]; b.rows++; b.Spend += r.Spend; b.Installs += r.Installs; b.AO += r.AO; b.days.add(r.Day); });
+  M.byMonth = byMonth;
   return { rows, meta: M };
 }
 
@@ -319,7 +361,7 @@ function pick(range, f) {
   return CD.filter(r => inR(r.Day, range) && (f.channel === 'All' || r.Channel === f.channel) && (f.obj === 'All' || r.Objective === f.obj) &&
     (f.type === 'All' || r.Type === f.type) && (f.camp === 'All' || r.Campaign === f.camp));
 }
-const BASE = ['Spend','Impressions','Clicks','Installs','ESign','AO'];
+const BASE = ['Spend','Impressions','Clicks','Installs','Leads','AO'];
 const div = (a, b) => b ? a / b : null;   // null shows as "—" (no divide-by-zero)
 function agg(rows) {
   const o = {}; BASE.forEach(k => o[k] = 0);
@@ -328,9 +370,9 @@ function agg(rows) {
   o.CPC       = div(o.Spend,    o.Clicks);       // Cost / Clicks
   o.CPI       = div(o.Spend,    o.Installs);     // Cost / Installs
   o.C2I       = div(o.Installs, o.Clicks);       // Installs / Clicks
-  o.ESign_CAC = div(o.Spend,    o.ESign);        // Cost / E-Sign
+  o.Lead_CAC = div(o.Spend,    o.Leads);        // Cost / Leads
   o.I2AO      = div(o.AO,       o.Installs);     // Account Open / Installs
-  o.E2AO      = div(o.AO,       o.ESign);        // Account Open / E-Sign
+  o.L2AO      = div(o.AO,       o.Leads);        // Account Open / Leads
   o.AO_CAC    = div(o.Spend,    o.AO);           // Cost / Account Open
   return o;
 }
@@ -355,6 +397,12 @@ function delta(a, b, lower) {
   const d = (a - b) / b, good = lower ? d < 0 : d > 0;
   return '<span class="' + (good ? 'up' : 'down') + '">' + (d >= 0 ? '↑ ' : '↓ ') + (Math.abs(d) * 100).toFixed(1) + '%</span>';
 }
+function deltaPP(a, b) {
+  if (bad(a) || bad(b)) return '';
+  const d = a - b, txt = RATIO_DISPLAY === 'percent' ? Math.abs(d * 100).toFixed(2) + ' pp' : Math.abs(d).toFixed(RATIO_DECIMALS);
+  if (Math.abs(d) < 1e-12) return '<span>0.00 pp</span>';
+  return '<span class="' + (d > 0 ? 'up' : 'down') + '">' + (d > 0 ? '↑ ' : '↓ ') + txt + '</span>';
+}
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* ---------- metric catalogue: [label, key, format, lowerIsBetter, formula] ---------- */
@@ -367,11 +415,11 @@ const METRICS = [
   ['Installs', 'Installs', 'num', false, ''],
   ['Cost / Install', 'CPI', 'unit', true, 'Cost ÷ Installs'],
   ['Click to Install', 'C2I', 'rate', false, 'Installs ÷ Clicks'],
-  ['E-Sign', 'ESign', 'num', false, ''],
-  ['E-Sign CAC', 'ESign_CAC', 'unit', true, 'Cost ÷ E-Sign'],
+  ['Leads', 'Leads', 'num', false, ''],
+  ['Lead CAC', 'Lead_CAC', 'unit', true, 'Cost ÷ Leads'],
   ['Account Open', 'AO', 'num', false, ''],
   ['Install to AO %', 'I2AO', 'rate', false, 'Account Open ÷ Installs'],
-  ['E-Sign to Account Open', 'E2AO', 'rate', false, 'Account Open ÷ E-Sign'],
+  ['Lead to Account Open', 'L2AO', 'rate', false, 'Account Open ÷ Leads'],
   ['Account Open CAC', 'AO_CAC', 'unit', true, 'Cost ÷ Account Open']
 ];
 const mDef = key => METRICS.find(m => m[1] === key) || METRICS[0];
@@ -459,10 +507,10 @@ function renderCtx(cur, cmp) {
 function renderCards(a, p) {
   $('kpis').innerHTML = METRICS.map(c =>
     '<div class="card kpi" title="' + esc(c[4] || c[0]) + '"><div class="l">' + c[0] + '</div><div class="v">' + FMT[c[2]](a[c[1]]) + '</div>' +
-    '<div class="f">' + (c[4] && c[4] !== 'Amount Spent' ? esc(c[4]) : '&nbsp;') + '</div><div class="d">' + delta(a[c[1]], p[c[1]], c[3]) + '</div></div>').join('');
+    '<div class="f">' + (c[4] && c[4] !== 'Amount Spent' ? esc(c[4]) : '&nbsp;') + '</div><div class="d" title="vs comparison period">' + (c[2] === 'rate' ? deltaPP(a[c[1]], p[c[1]]) : delta(a[c[1]], p[c[1]], c[3])) + '</div></div>').join('');
 }
 
-const STAGES = [['Impressions', 'Impressions'], ['Clicks', 'Clicks'], ['Installs', 'Installs'], ['E-Sign', 'ESign'], ['Account Open', 'AO']];
+const STAGES = [['Impressions', 'Impressions'], ['Clicks', 'Clicks'], ['Installs', 'Installs'], ['Leads', 'Leads'], ['Account Open', 'AO']];
 function renderFunnel(a) {
   const top = a.Impressions || 0, mode = state.funnelScale;
   $('funnel').innerHTML = STAGES.map((s, i) => {
@@ -615,22 +663,25 @@ function renderTable(rows, f) {
 function renderNotes() {
   const M = META, T = M.totals, nn = M.nonNumeric;
   const issues = [];
-  if (M.zeroSpendConv) issues.push(M.zeroSpendConv + ' row(s) have Installs / E-Sign / Account Open but ₹0 cost (' + Object.keys(M.zeroSpendConvByCh).map(k => esc(k) + ': ' + M.zeroSpendConvByCh[k]).join(', ') + '). Their conversions are included in totals, which lowers blended Cost/Install and CACs. Filter by channel to check.');
+  if (M.zeroSpendConv) issues.push(M.zeroSpendConv + ' row(s) have Installs / Leads / Account Open but ₹0 cost (' + Object.keys(M.zeroSpendConvByCh).map(k => esc(k) + ': ' + M.zeroSpendConvByCh[k]).join(', ') + '). Their conversions are included in totals, which lowers blended Cost/Install and CACs. Filter by channel to check.');
   if (M.blankName) issues.push(M.blankName + ' row(s) have no campaign name; shown as “' + BLANKNAME + '”.');
   if (M.unmappedRows) issues.push(M.unmappedRows + ' row(s) have a blank or “-” Channel / Objective / Campaign Type (' + (M.unmappedCampaigns.length ? 'campaigns: ' + M.unmappedCampaigns.map(esc).join('; ') : 'no named campaign') + '); shown as “' + UNMAPPED + '”.');
   if (M.errRows) issues.push(M.errRows + ' row(s) carry a spreadsheet error (e.g. #N/A, #REF!) in a mapping column; treated as unmapped.');
   if (M.dupPairs) issues.push(M.dupPairs + ' Day + Channel + Campaign combination(s) appear on more than one row. They are added together, so check they are not double-counted.');
   if (M.nonNumericTotal) issues.push(M.nonNumericTotal + ' non-numeric cell(s) in numeric columns (' + Object.keys(nn).map(k => esc(k) + ': ' + nn[k]).join(', ') + ') were counted as 0.');
   if (M.negatives) issues.push(M.negatives + ' negative value(s) in the numeric columns.');
-  if (M.skippedDate) issues.push(M.skippedDate + ' row(s) skipped because the Day could not be read as a date.');
+  if (M.skippedDate) issues.push(M.skippedDate + ' row(s) with numbers were skipped because the Day could not be read as a date (e.g. ' + M.skippedSamples.map(x => '“' + esc(x) + '”').join(', ') + '). They are NOT in any figure.');
+  if (M.dateOrder.dmy && M.dateOrder.mdy) issues.push('Text dates appear in both DD/MM and MM/DD order (' + M.dateOrder.dmy + ' vs ' + M.dateOrder.mdy + ' unambiguous values). Read as ' + (M.dateOrder.order === 'DMY' ? 'DD/MM/YYYY' : 'MM/DD/YYYY') + '; please make the Day column consistent.');
   const ch = Object.keys(M.byChannel).sort((a, b) => M.byChannel[b] - M.byChannel[a]).map(k => esc(k) + ' ' + money(M.byChannel[k])).join(' · ');
   const formulas = METRICS.filter(m => m[2] === 'rate' || m[2] === 'unit').map(m => esc(m[0]) + ' = ' + esc(m[4])).join(' · ');
   $('notesBody').innerHTML =
     '<b>Source.</b> ' + esc(M.srcName) + ' · ' + num(M.rows) + ' rows · ' + num(M.campaigns) + ' campaigns · ' + lblFull(M.dateMin) + ' to ' + lblFull(M.dateMax) + '. All rows in the tab are read, whatever filter view is applied in Google Sheets.<br>' +
-    '<b>Columns used.</b> Day, Campaign Name, Channel, Objective, Campaign Type, Impressions, Clicks, Amount Spent (= Cost), Installs, E-Sign, Account Open. Week, Month and New Campaign Name are not used (week/month come from the Day).<br>' +
+    '<b>Columns used.</b> Day, Campaign Name, Channel, Objective, Campaign Type, Impressions, Clicks, Amount Spent (= Cost), Installs, Leads, Account Open. Week, Month and New Campaign Name are not used (week/month come from the Day).<br>' +
     '<b>Formulas.</b> ' + formulas + '. Every ratio is recalculated from the summed raw fields for the selected range (never an average of daily ratios). A zero denominator shows “—”. Ratios are shown as ' + (RATIO_DISPLAY === 'percent' ? 'percentages.' : 'plain decimals (not ×100).') + '<br>' +
-    '<b>Sheet totals (all rows).</b> Cost ' + money(T.Spend) + ' · Impressions ' + num(T.Impressions) + ' · Clicks ' + num(T.Clicks) + ' · Installs ' + num(T.Installs) + ' · E-Sign ' + num(T.ESign) + ' · Account Open ' + num(T.AO) + '.<br>' +
+    '<b>Sheet totals (all rows).</b> Cost ' + money(T.Spend) + ' · Impressions ' + num(T.Impressions) + ' · Clicks ' + num(T.Clicks) + ' · Installs ' + num(T.Installs) + ' · Leads ' + num(T.Leads) + ' · Account Open ' + num(T.AO) + '.<br>' +
     '<b>Cost by channel.</b> ' + ch + '.<br>' +
+    '<b>Rows by month (for reconciliation with the sheet).</b><div class="tw" style="max-height:none;margin:4px 0 8px"><table style="width:auto"><thead><tr><th>Month</th><th>Days</th><th>Rows</th><th>Cost</th><th>Installs</th><th>Account Open</th></tr></thead><tbody>' +
+      Object.keys(M.byMonth).sort().map(k => { const b = M.byMonth[k]; return '<tr><td>' + MON[+k.slice(5) - 1] + ' ' + k.slice(0, 4) + '</td><td>' + b.days.size + '</td><td>' + num(b.rows) + '</td><td>' + money(b.Spend) + '</td><td>' + num(b.Installs) + '</td><td>' + num(b.AO) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
     '<b>Data-quality flags (nothing was corrected silently):</b>' + (issues.length ? '<ul><li>' + issues.join('</li><li>') + '</li></ul>' : ' none found.<br>');
 }
 
@@ -660,9 +711,16 @@ function installModel(model, srcName, keep) {
     $('period').value = DEFAULT_PERIOD; $('compare').value = 'auto';
     state.focus = null; state.sortKey = 'Spend'; state.sortDir = -1; $('distMetric').value = 'Spend'; $('viewBy').value = 'campaign';
   }
-  syncRangeInputs(); renderNotes(); render();
+  syncRangeInputs(); renderNotes(); renderWarn(); render();
 }
 
+function renderWarn() {
+  const M = META, w = [];
+  if (M.skippedDate) w.push('<b>' + num(M.skippedDate) + ' row(s) are missing from the dashboard</b> because their Day value could not be read as a date (e.g. ' + M.skippedSamples.map(x => '“' + esc(x) + '”').join(', ') + '). Fix those cells in the sheet, then click Refresh data.');
+  if (M.dateOrder.dmy && M.dateOrder.mdy) w.push('<b>Mixed date formats</b> in the Day column (some DD/MM, some MM/DD). Dates were read as ' + (M.dateOrder.order === 'DMY' ? 'DD/MM/YYYY' : 'MM/DD/YYYY') + '; some days may be wrong until the column is made consistent.');
+  if (M.nonNumericTotal) w.push('<b>' + num(M.nonNumericTotal) + ' cell(s) in number columns are not numbers</b> (' + Object.keys(M.nonNumericCells).map(k => esc(k) + ': ' + M.nonNumeric[k] + ', e.g. “' + esc(M.nonNumericCells[k]) + '”').join('; ') + ') and were counted as 0. Fix them in the sheet, then click Refresh data.');
+  const el = $('dqwarn'); el.innerHTML = w.join('<br>'); el.classList.toggle('hide', !w.length);
+}
 function showMsg(kind, html) {
   const el = $('loadmsg'); el.className = kind;
   el.innerHTML = '<span class="x" title="Dismiss">✕</span>' + html;
