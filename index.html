@@ -5,14 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ventura · Paid Media Performance</title>
 <style>
-:root{--page:#e4ebf5;--card:#fff;--ink:#1a2230;--muted:#667085;--line:#e6e9ef;--brand:#14365f;--blue:#1a8cff;--blue-dim:#c9e2ff;--pos:#0a8a53;--neg:#d12f2f;--amber:#d98a00}
+:root{--page:#e4ebf5;--card:#fff;--ink:#1a2230;--muted:#667085;--line:#e6e9ef;--brand:#14365f;--cur:#1a8cff;--cur-dim:#c9e2ff;--cmp:#f28c28;--cmp-dim:#fbd9b8;--cmp-ink:#c46a12;--pos:#0a8a53;--neg:#d12f2f}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{font-family:"Segoe UI",Inter,Arial,sans-serif;background:var(--page);color:var(--ink);font-size:13px}
 .top{background:var(--brand);color:#fff;padding:16px 24px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px}
 .top h1{margin:0;font-size:26px;font-weight:800;letter-spacing:.02em;text-transform:uppercase}
 .top .sub{font-size:12px;opacity:.88;margin-top:2px}
-.top .acts{display:flex;gap:8px;flex-wrap:wrap}
 .btn{border:1px solid #cdd3dd;background:#fff;border-radius:7px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink);font-family:inherit}
 .btn:hover{background:#f4f6f9}
 .btn:disabled{opacity:.6;cursor:wait}
@@ -20,54 +19,89 @@ body{font-family:"Segoe UI",Inter,Arial,sans-serif;background:var(--page);color:
 .top .btn:hover{background:rgba(255,255,255,.14)}
 .wrap{padding:14px 20px 28px;max-width:1700px;margin:0 auto}
 .card{background:var(--card);border-radius:10px;box-shadow:0 1px 2px rgba(16,24,40,.06)}
-#loadmsg{margin-bottom:12px;padding:10px 14px;border-radius:10px;font-size:12px;line-height:1.55;display:none;white-space:normal}
+#loadmsg,#dqwarn{margin-bottom:12px;padding:10px 14px;border-radius:10px;font-size:12px;line-height:1.55}
+#loadmsg{display:none}
 #loadmsg.ok{display:block;background:#e9f8ef;border:1px solid #a8dcbc}
 #loadmsg.err{display:block;background:#fdeceb;border:1px solid #f2b3ae}
 #loadmsg.busy{display:block;background:#eef4ff;border:1px solid #bcd4fa}
 #loadmsg .x{float:right;cursor:pointer;font-weight:700;margin-left:10px}
-.filters{padding:12px 14px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
-.filters label{font-size:11px;font-weight:700;color:var(--muted);display:block;max-width:100%}
+#dqwarn{background:#fff6e0;border:1px solid #f0c96a}
+.filters{padding:12px 14px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;position:relative;z-index:5}
+.filters label,.lab{font-size:11px;font-weight:700;color:var(--muted);display:block;max-width:100%}
 .filters select,.filters input[type=date]{display:block;margin-top:4px;border:1px solid #d5dae3;border-radius:7px;padding:7px 9px;font-size:12.5px;background:#fff;color:var(--ink);min-width:125px;max-width:100%;font-family:inherit}
 .hide{display:none!important}
+.msel{position:relative}
+.mselbtn{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px;border:1px solid #d5dae3;border-radius:7px;padding:7px 9px;font-size:12.5px;background:#fff;color:var(--ink);width:280px;max-width:80vw;cursor:pointer;font-family:inherit;text-align:left}
+.mselbtn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mpanel{position:absolute;top:100%;left:0;margin-top:4px;width:380px;max-width:90vw;background:#fff;border:1px solid #d5dae3;border-radius:9px;box-shadow:0 8px 24px rgba(16,24,40,.16);padding:8px;z-index:20}
+.mpanel input[type=search]{width:100%;border:1px solid #d5dae3;border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit}
+.mact{display:flex;gap:6px;margin:6px 0;align-items:center}
+.mact .btn{padding:4px 9px;font-size:11px}
+.mact .cnt{margin-left:auto;font-size:11px;color:var(--muted)}
+.mlist{max-height:280px;overflow:auto;border-top:1px solid var(--line);padding-top:4px}
+.mlist label{display:flex;gap:7px;align-items:flex-start;padding:5px 4px;font-size:12px;font-weight:500;color:var(--ink);cursor:pointer;border-radius:5px}
+.mlist label:hover{background:#f4f8ff}
+.mlist .ch{margin-left:auto;font-size:10.5px;color:var(--muted);white-space:nowrap}
+.cmpbox{display:flex;flex-direction:column}
+.cmprow{display:flex;align-items:center;gap:8px;margin-top:6px;height:28px}
+.switch{position:relative;width:42px;height:22px;display:inline-block}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#cfd5df;border-radius:22px;cursor:pointer;transition:.15s}
+.slider:before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.15s}
+.switch input:checked+.slider{background:var(--cmp)}
+.switch input:checked+.slider:before{transform:translateX(20px)}
+#cmpState{font-size:12px;font-weight:700}
 .ctx{width:100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:9px}
 .ctx b{color:var(--ink)}
+.ctx .cb{color:var(--cur)}.ctx .co{color:var(--cmp-ink)}
 .chip{background:#e8f3ff;color:#1559a8;border-radius:14px;padding:3px 9px;font-weight:600;cursor:pointer;font-size:11.5px}
 .chip:hover{background:#d5e9ff}
-.kpis{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:12px}
 .kpi{padding:12px 10px;text-align:center}
 .kpi .l{font-size:12px;font-weight:700;color:#344054}
 .kpi .v{font-size:22px;font-weight:600;margin-top:4px;letter-spacing:-.01em;overflow-wrap:anywhere}
 .kpi .f{font-size:10.5px;color:var(--muted);margin-top:2px}
-.kpi .d{font-size:11px;margin-top:3px;min-height:14px}
+.kpi .cv{font-size:11.5px;margin-top:4px;color:var(--cmp-ink);font-weight:600}
+.kpi .d{font-size:11px;margin-top:2px;min-height:14px}
 .up{color:var(--pos)}.down{color:var(--neg)}
 .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}
-.panel{padding:12px 14px}
+.panel{padding:12px 14px;min-width:0}
 .panel h3{margin:0 0 8px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;text-align:center;color:#344054}
+.panel h3 .co{color:var(--cmp-ink)}
 .panel .ctl{display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:6px;flex-wrap:wrap;font-size:11.5px;color:var(--muted)}
-.panel .ctl select,.panel .ctl input[type=number]{border:1px solid #d5dae3;border-radius:6px;padding:4px 7px;font-size:11.5px;background:#fff;font-family:inherit}
-.cbox{position:relative;height:215px}
-.cbox.tall{height:250px}
+.panel .ctl select{border:1px solid #d5dae3;border-radius:6px;padding:4px 7px;font-size:11.5px;background:#fff;font-family:inherit}
+.legend{display:flex;gap:14px;justify-content:center;font-size:11.5px;color:#344054;margin-bottom:4px;flex-wrap:wrap}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px}
+.cbox{position:relative;height:230px}
 #pFunnel{grid-column:1/5;grid-row:span 2}
-#p7{grid-column:5/13}
+#pTrend{grid-column:5/13}
 #pMtd{grid-column:5/13}
 #pDist{grid-column:1/8}
 #pGauge{grid-column:8/13}
 #pTable{grid-column:1/-1}
 .fstage{padding:7px 8px;border-radius:8px;cursor:pointer;border:2px solid transparent}
 .fstage:hover{background:#f5f9ff}
-.fstage.active{border-color:var(--blue);background:#f0f7ff}
-.fhead{display:flex;justify-content:space-between;font-weight:700;font-size:12.5px}
+.fstage.active{border-color:var(--cur);background:#f0f7ff}
+.fhead{display:flex;justify-content:space-between;font-weight:700;font-size:12.5px;gap:8px}
 .fhead .fv{font-weight:600}
-.ftrack{display:flex;justify-content:center;margin:4px 0}
-.fbar{height:20px;background:var(--blue);border-radius:4px;min-width:3px}
-.fmeta{font-size:11px;color:var(--muted);text-align:center}
-.tw{overflow:auto;max-height:520px}
+.fhead .fvc{font-weight:600;color:var(--cmp-ink);font-size:11.5px}
+.ftrack{display:flex;justify-content:center;margin:4px 0 2px}
+.fbar{height:18px;background:var(--cur);border-radius:4px;min-width:3px}
+.fbar.c{height:7px;background:var(--cmp)}
+.fmeta{font-size:11px;color:var(--muted);text-align:center;margin-top:2px}
+.fmeta .co{color:var(--cmp-ink)}
+.dscroll{overflow:auto;max-height:360px;border-radius:6px}
+.dinner{position:relative}
+.tw{overflow:auto;max-height:560px}
 table{width:100%;border-collapse:collapse;font-size:12px}
-th,td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;vertical-align:top}
 th:first-child,td:first-child{text-align:left}
 td:first-child{max-width:340px;overflow:hidden;text-overflow:ellipsis}
 th{font-size:11px;font-weight:700;color:#344054;background:#fafbfc;position:sticky;top:0;cursor:pointer;user-select:none;z-index:1}
-th.sorted{color:var(--blue)}
+th.sorted{color:var(--cur)}
+td .c1{color:var(--ink)}
+.cmpmode td .c1{color:#0f6fd6;font-weight:600}
+td .c2{color:var(--cmp-ink);font-size:11px;margin-top:2px}
 tbody tr.row{cursor:pointer}
 tbody tr.row:hover{background:#f7faff}
 tbody tr.sel{background:#eaf4ff}
@@ -78,26 +112,25 @@ tfoot td{font-weight:700;border-top:2px solid var(--ink);background:#fafbfc;posi
 .gbox{position:relative;height:215px;width:100%}
 .glim{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;align-items:flex-end}
 .glim label{font-size:11px;font-weight:700;color:var(--muted)}
-.glim input[type=number]{display:block;margin-top:3px;width:150px}
+.glim input[type=number]{display:block;margin-top:3px;width:150px;border:1px solid #d5dae3;border-radius:6px;padding:4px 7px;font-size:11.5px;font-family:inherit}
 details{margin-top:12px;padding:12px 14px}
 details summary{cursor:pointer;font-weight:700;font-size:12px;color:#344054}
 details .body{margin-top:8px;font-size:12px;line-height:1.65;color:#344054}
 details .body ul{margin:4px 0 8px 18px;padding:0}
 @media(max-width:1300px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
-@media(max-width:1100px){#pFunnel,#p7,#pMtd,#pDist,#pGauge{grid-column:1/-1;grid-row:auto}}
+@media(max-width:1100px){#pFunnel,#pTrend,#pMtd,#pDist,#pGauge{grid-column:1/-1;grid-row:auto}}
 @media(max-width:600px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.top h1{font-size:20px}}
 </style>
 </head>
 <body>
 <div class="top">
   <div><h1>Ventura · Paid Media Performance</h1><div class="sub" id="subline">Loading…</div></div>
-  <div class="acts">
-    <button class="btn" id="btnRefresh" title="Fetch the latest campaign data from the connected Google Sheet">↻ Refresh data</button>
-  </div>
+  <div><button class="btn" id="btnRefresh" title="Fetch the latest campaign data from the Google Sheet">↻ Refresh data</button></div>
 </div>
 <div class="wrap">
 
 <div id="loadmsg"></div>
+<div id="dqwarn" class="hide"></div>
 
 <div class="card filters">
   <label>Date range
@@ -112,11 +145,21 @@ details .body ul{margin:4px 0 8px 18px;padding:0}
   <label class="rngA hide">From<input type="date" id="fromA"></label>
   <label class="rngA hide">To<input type="date" id="toA"></label>
   <label>Channel<select id="channel"></select></label>
-  <label>Objective<select id="obj"></select></label>
-  <label>Campaign type<select id="type"></select></label>
-  <label>Campaign name<select id="camp"></select></label>
-  <label>Compare against
-    <select id="compare"><option value="auto">Prior equivalent period</option><option value="custom">Custom range…</option></select>
+  <div class="msel" id="campBox">
+    <span class="lab">Campaigns</span>
+    <button type="button" class="mselbtn" id="campBtn"><span id="campBtnTxt">All campaigns</span><b>▾</b></button>
+    <div class="mpanel hide" id="campPanel">
+      <input type="search" id="campSearch" placeholder="Search campaigns…">
+      <div class="mact"><button type="button" class="btn" id="campAll">Select all shown</button><button type="button" class="btn" id="campClear">Clear (show all)</button><span class="cnt" id="campCnt"></span></div>
+      <div class="mlist" id="campList"></div>
+    </div>
+  </div>
+  <div class="cmpbox">
+    <span class="lab">Comparison</span>
+    <div class="cmprow"><label class="switch" title="Turn comparison on or off"><input type="checkbox" id="cmpOn"><span class="slider"></span></label><span id="cmpState">Off</span></div>
+  </div>
+  <label class="cmpOnly hide">Compare against
+    <select id="cmpMode"><option value="prev">Previous equivalent period</option><option value="custom">Custom range…</option></select>
   </label>
   <label class="rngB hide">From<input type="date" id="fromB"></label>
   <label class="rngB hide">To<input type="date" id="toB"></label>
@@ -132,28 +175,30 @@ details .body ul{margin:4px 0 8px 18px;padding:0}
     <div class="ctl">Scale:
       <select id="fscale"><option value="true">True scale (Impressions = 100%)</option><option value="log">Readable scale</option></select>
     </div>
+    <div class="legend cmpLegend hide"><span><i style="background:var(--cur)"></i>Selected period</span><span><i style="background:var(--cmp)"></i>Comparison period</span></div>
     <div id="funnel"></div>
-    <div class="note" style="margin-top:8px">Click a stage to rank the breakdown and table by that metric. Installs, E-Signs and Account Opens are counted on the day they happen, so stages are not a strict single-user path.</div>
+    <div class="note" style="margin-top:8px">Click a stage to rank the distribution chart and table by that metric. Installs, Leads, Account Opens and Traded AOs are counted on the day they happen, so stages are not a strict single-user path.</div>
   </div>
 
-  <div class="card panel" id="p7">
-    <h3 id="t7">Last 7 days</h3>
-    <div class="ctl">Metric: <select class="tmetric" id="tm7"></select><span class="note">Click a point to filter the dashboard to that day.</span></div>
-    <div class="cbox"><canvas id="c7"></canvas></div>
+  <div class="card panel" id="pTrend">
+    <h3 id="tTrend">Trend</h3>
+    <div class="ctl">Metric: <select id="tmT"></select><span class="note">Click a point to filter the dashboard to that day.</span></div>
+    <div class="cbox"><canvas id="cT"></canvas></div>
   </div>
 
   <div class="card panel" id="pMtd">
     <h3 id="tMtd">Month to date</h3>
-    <div class="ctl">Metric: <select class="tmetric" id="tmM"></select></div>
+    <div class="ctl">Metric: <select id="tmM"></select></div>
     <div class="cbox"><canvas id="cM"></canvas></div>
   </div>
 
   <div class="card panel" id="pDist">
     <h3>Distribution</h3>
-    <div class="ctl">View by: <select id="viewBy"><option value="campaign">Campaign</option><option value="channel">Channel</option><option value="objective">Objective</option><option value="type">Campaign type</option></select>
-      Metric: <select id="distMetric"></select><span class="note" id="distNote"></span></div>
-    <div class="cbox tall"><canvas id="cD"></canvas></div>
-    <div class="note" style="text-align:center">Click a bar to filter the whole dashboard to it. Click again to clear.</div>
+    <div class="ctl">View by: <select id="viewBy"><option value="campaign">Campaign name</option><option value="channel">Channel</option><option value="day">Date</option></select>
+      Metric: <select id="distMetric"></select></div>
+    <div class="legend cmpLegend hide"><span><i style="background:var(--cur)"></i>Selected period</span><span><i style="background:var(--cmp)"></i>Comparison period</span></div>
+    <div class="dscroll" id="dScroll"><div class="dinner" id="dInner"><canvas id="cD"></canvas></div></div>
+    <div class="note" style="text-align:center;margin-top:4px" id="distNote"></div>
   </div>
 
   <div class="card panel" id="pGauge">
@@ -171,7 +216,7 @@ details .body ul{margin:4px 0 8px 18px;padding:0}
 
   <div class="card panel" id="pTable">
     <h3>Campaign table</h3>
-    <div class="note" style="text-align:center;margin-bottom:6px">Click a column to sort. Click a row to filter the dashboard to that campaign.</div>
+    <div class="note" style="text-align:center;margin-bottom:6px" id="tblNote">Click a column to sort. Click a row to add or remove that campaign from the selection.</div>
     <div class="tw"><table id="tbl"></table></div>
   </div>
 </div>
@@ -199,20 +244,21 @@ const $ = id => document.getElementById(id);
 
 /* ================= CONFIG — edit here if the sheet or display changes ================= */
 /* Paste the Apps Script web app URL (ends in /exec) between the quotes. */
-const DATA_URL = 'https://script.google.com/macros/s/AKfycbyYzxnOIe-6iqg-nRYCuH8ofammP4RNi-1ZQA6L2PU1iLZKnTWFPoV_DP9hS8OVcwA/exec';
+const DATA_URL = 'https://script.google.com/macros/s/AKfycbz75hPGmuyShY91ZzHx077WOrQYR0mr9GvwrcIi9tfFsRPimSzi88khhh4VisnaYgk/exec';
 const DEFAULT_PERIOD = 'yesterday';           // 'yesterday' = latest day in the sheet
-/* Ratios are plain divisions (e.g. Clicks / Impressions).
-   'decimal' shows the raw result (0.0286); 'percent' shows it ×100 with a % sign (2.86%). */
-const RATIO_DISPLAY = 'decimal';
-const RATIO_DECIMALS = 4;
+/* Ratios are divisions (e.g. Clicks / Impressions).
+   'percent' shows them ×100 with a % sign (2.86%); 'decimal' shows the raw result (0.0286). */
+const RATIO_DISPLAY = 'percent';
+const RATIO_DECIMALS = 2;
 /* Exact header names in row 1 of the sheet tab. */
 const COL = {
-  day: 'Day', campaign: 'Campaign Name', channel: 'Channel', objective: 'Objective', type: 'Campaign Type',
-  impressions: 'Impressions', clicks: 'Clicks', spend: 'Amount Spent', installs: 'Installs', esign: 'E-Sign', ao: 'Account Open'
+  day: 'Day', campaign: 'Campaign Name', channel: 'Channel',
+  impressions: 'Impressions', clicks: 'Clicks', spend: 'Amount Spent', installs: 'Installs', leads: 'Leads', ao: 'Account Open', traded: 'Traded AO'
 };
 /* ===================================================================================== */
 
 const REQUIRED = Object.values(COL);
+const DIRECT = 'Direct';   // channel with no spend by design (people who saw the ads but came to the platform directly)
 const UNMAPPED = '(unmapped)', BLANKNAME = '(blank campaign name)';
 
 /* ---------- dates: ISO strings only (timezone-proof) ---------- */
@@ -228,14 +274,42 @@ const daysInMonth = s => new Date(Date.UTC(+s.slice(0, 4), +s.slice(5, 7), 0)).g
 const pad2 = n => String(n).padStart(2, '0');
 
 function serialToISO(n){ return new Date(Date.UTC(1899, 11, 30) + Math.floor(n) * DAY).toISOString().slice(0, 10); }
-function toISO(v){
-  if (typeof v === 'number' && v > 20000 && v < 90000) return serialToISO(v);   // real date cell (serial number)
+const MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, sept:9, oct:10, nov:11, dec:12 };
+let DATE_ORDER = 'DMY';   // set per dataset by detectDateOrder(); India / UK sheets use DD/MM/YYYY
+function ymd(y, mo, d) {
+  y = +y; mo = +mo; d = +d;
+  if (y < 100) y += 2000;
+  if (!(mo >= 1 && mo <= 12 && d >= 1 && d <= 31 && y >= 2000 && y <= 2100)) return null;
+  const t = new Date(Date.UTC(y, mo - 1, d));
+  if (t.getUTCFullYear() !== y || t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== d) return null;   // rejects 31/02 etc.
+  return y + '-' + pad2(mo) + '-' + pad2(d);
+}
+const monNum = w => MONTHS[String(w).toLowerCase().slice(0, String(w).toLowerCase().startsWith('sept') ? 4 : 3)] || null;
+/* Looks at every text date like 05/10/2026 and decides DD/MM vs MM/DD from values where one part is > 12. */
+function detectDateOrder(values) {
+  let dmy = 0, mdy = 0;
+  values.forEach(v => {
+    if (typeof v !== 'string') return;
+    const m = /^\s*(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\s*$/.exec(v);
+    if (!m) return;
+    const a = +m[1], b = +m[2];
+    if (a > 12 && b <= 12) dmy++; else if (b > 12 && a <= 12) mdy++;
+  });
+  return { order: mdy > dmy ? 'MDY' : 'DMY', dmy, mdy };
+}
+function toISO(v) {
+  if (typeof v === 'number') return (v > 20000 && v < 90000) ? serialToISO(v) : null;   // date cell sent as serial number
+  if (v instanceof Date) return isNaN(v) ? null : v.toISOString().slice(0, 10);
   if (typeof v !== 'string') return null;
-  const s = v.trim();
-  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);                                    // 2025-11-01
-  if (m) return m[1] + '-' + m[2] + '-' + m[3];
-  m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/.exec(s);                       // 01/11/2025 = DD/MM/YYYY
-  if (m) { const d = +m[1], mo = +m[2]; if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) return m[3] + '-' + pad2(mo) + '-' + pad2(d); }
+  const s = v.trim().replace(/\s+/g, ' ');
+  if (!s) return null;
+  let m;
+  if ((m = /^(\d{4})[\-\/.](\d{1,2})[\-\/.](\d{1,2})(?:[ T].*)?$/.exec(s))) return ymd(m[1], m[2], m[3]);                    // 2026-10-06
+  if ((m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?: .*)?$/.exec(s)))                                                   // 06/10/2026, 6-10-26
+    return DATE_ORDER === 'MDY' ? ymd(m[3], m[1], m[2]) : ymd(m[3], m[2], m[1]);
+  if ((m = /^(\d{1,2})(?:st|nd|rd|th)?[ \-\/]([A-Za-z]{3,9})[ \-\/,]+(\d{2,4})$/.exec(s)) && monNum(m[2])) return ymd(m[3], monNum(m[2]), m[1]);   // 6-Oct-2026
+  if ((m = /^([A-Za-z]{3,9}) (\d{1,2})(?:st|nd|rd|th)?,? (\d{4})$/.exec(s)) && monNum(m[1])) return ymd(m[3], monNum(m[1]), m[2]);                // Oct 6, 2026
+  if ((m = /^[A-Za-z]{3},? ([A-Za-z]{3}) (\d{1,2}) (\d{4})/.exec(s)) && monNum(m[1])) return ymd(m[3], monNum(m[1]), m[2]);                         // Tue Oct 06 2026 ...
   return null;
 }
 
@@ -246,7 +320,9 @@ function ingest(table, srcName){
   const missing = REQUIRED.filter(c => !(c in idx));
   if (missing.length) throw new Error('These required columns were not found: ' + missing.join(', ') + '. Row 1 of the sheet tab must contain these exact headers.');
   const g = (r, n) => r[idx[n]];
-  const M = { rows: 0, skippedDate: 0, blankName: 0, unmappedRows: 0, errRows: 0, nonNumeric: {}, nonNumericTotal: 0, negatives: 0, dupPairs: 0,
+  const det = detectDateOrder(table.rows.map(r => r[idx[COL.day]]));
+  DATE_ORDER = det.order;
+  const M = { dateOrder: det, skippedSamples: [], skippedBlank: 0, rows: 0, skippedDate: 0, blankName: 0, unmappedRows: 0, errRows: 0, nonNumeric: {}, nonNumericCells: {}, nonNumericTotal: 0, negatives: 0, dupPairs: 0,
     zeroSpendConv: 0, zeroSpendConvByCh: {}, unmappedCampaigns: new Set(), srcName: srcName || '' };
   const rows = [], seen = {}, dupKeys = new Set();
   const dimOf = v => {
@@ -262,23 +338,31 @@ function ingest(table, srcName){
     if (s === '' || s === '-') return 0;
     const f = Number(s);
     if (isFinite(f)) { if (f < 0) M.negatives++; return f; }
-    M.nonNumeric[col] = (M.nonNumeric[col] || 0) + 1; M.nonNumericTotal++; return 0;
+    M.nonNumeric[col] = (M.nonNumeric[col] || 0) + 1; M.nonNumericTotal++; if (!(col in M.nonNumericCells)) M.nonNumericCells[col] = String(v); return 0;
   };
   for (const r of table.rows) {
     const day = toISO(g(r, COL.day));
-    if (!day) { M.skippedDate++; continue; }
+    if (!day) {
+      const raw = g(r, COL.day);
+      const empty = raw == null || String(raw).trim() === '';
+      const hasNumbers = [COL.impressions, COL.clicks, COL.spend, COL.installs, COL.leads, COL.ao, COL.traded].some(c => { const x = g(r, c); return x !== '' && x != null && Number(String(x).replace(/[,₹\s]/g, '')) !== 0; });
+      if (empty && !hasNumbers) { M.skippedBlank++; continue; }       // genuinely empty row
+      M.skippedDate++;
+      if (M.skippedSamples.length < 6) M.skippedSamples.push(String(raw));
+      continue;
+    }
     let name = g(r, COL.campaign); name = name == null || String(name).trim() === '' ? null : String(name).trim();
-    const ch = dimOf(g(r, COL.channel)), ob = dimOf(g(r, COL.objective)), ty = dimOf(g(r, COL.type));
+    const ch = dimOf(g(r, COL.channel));
     const rec = {
       Day: day, Campaign: name || BLANKNAME,
-      Channel: ch && ch !== '#ERR' ? ch : UNMAPPED, Objective: ob && ob !== '#ERR' ? ob : UNMAPPED, Type: ty && ty !== '#ERR' ? ty : UNMAPPED,
+      Channel: ch && ch !== '#ERR' ? ch : UNMAPPED,
       Impressions: numOf(g(r, COL.impressions), COL.impressions), Clicks: numOf(g(r, COL.clicks), COL.clicks), Spend: numOf(g(r, COL.spend), COL.spend),
-      Installs: numOf(g(r, COL.installs), COL.installs), ESign: numOf(g(r, COL.esign), COL.esign), AO: numOf(g(r, COL.ao), COL.ao)
+      Installs: numOf(g(r, COL.installs), COL.installs), Leads: numOf(g(r, COL.leads), COL.leads), AO: numOf(g(r, COL.ao), COL.ao), Traded: numOf(g(r, COL.traded), COL.traded)
     };
     if (!name) M.blankName++;
-    if (rec.Channel === UNMAPPED || rec.Objective === UNMAPPED || rec.Type === UNMAPPED) { M.unmappedRows++; if (name) M.unmappedCampaigns.add(name); }
-    if (ch === '#ERR' || ob === '#ERR' || ty === '#ERR') M.errRows++;
-    if (rec.Spend === 0 && (rec.Installs + rec.ESign + rec.AO) > 0) { M.zeroSpendConv++; M.zeroSpendConvByCh[rec.Channel] = (M.zeroSpendConvByCh[rec.Channel] || 0) + 1; }
+    if (rec.Channel === UNMAPPED) { M.unmappedRows++; if (name) M.unmappedCampaigns.add(name); }
+    if (ch === '#ERR') M.errRows++;
+    if (rec.Channel !== DIRECT && rec.Spend === 0 && (rec.Installs + rec.Leads + rec.AO + rec.Traded) > 0) { M.zeroSpendConv++; M.zeroSpendConvByCh[rec.Channel] = (M.zeroSpendConvByCh[rec.Channel] || 0) + 1; }
     const k = day + '|' + rec.Channel + '|' + rec.Campaign; if (seen[k]) dupKeys.add(k); seen[k] = 1;
     rows.push(rec);
   }
@@ -290,6 +374,8 @@ function ingest(table, srcName){
   M.totals = agg(rows);
   const byCh = {}; rows.forEach(r => byCh[r.Channel] = (byCh[r.Channel] || 0) + r.Spend);
   M.byChannel = byCh; M.unmappedCampaigns = [...M.unmappedCampaigns].sort();
+  const byMonth = {}; rows.forEach(r => { const k = r.Day.slice(0, 7); (byMonth[k] = byMonth[k] || { rows: 0, Spend: 0, Installs: 0, Leads: 0, AO: 0, Traded: 0, days: new Set() }); const b = byMonth[k]; b.rows++; b.Spend += r.Spend; b.Installs += r.Installs; b.Leads += r.Leads; b.AO += r.AO; b.Traded += r.Traded; b.days.add(r.Day); });
+  M.byMonth = byMonth;
   return { rows, meta: M };
 }
 
@@ -306,41 +392,49 @@ function pickRange(fromId, toId, fallback) {
   return f <= t ? [f, t] : [t, f];
 }
 function currentRange() { const p = $('period').value; return p === 'custom' ? pickRange('fromA', 'toA', presetRange('all')) : presetRange(p); }
-function compareRange(cur) {
-  if ($('compare').value === 'custom') return pickRange('fromB', 'toB', [addDays(cur[0], -1), addDays(cur[0], -1)]);
+function prevRange(cur) {
   const len = diffDays(cur[0], cur[1]) + 1, end = addDays(cur[0], -1);
   return [addDays(end, -(len - 1)), end];
 }
+function compareRange(cur) { return $('cmpMode').value === 'custom' ? pickRange('fromB', 'toB', prevRange(cur)) : prevRange(cur); }
 const inR = (d, r) => d >= r[0] && d <= r[1];
 
 /* ---------- selection + formulas (ratios recomputed from summed raw fields) ---------- */
-function F() { return { channel: $('channel').value, obj: $('obj').value, type: $('type').value, camp: $('camp').value }; }
-function pick(range, f) {
-  return CD.filter(r => inR(r.Day, range) && (f.channel === 'All' || r.Channel === f.channel) && (f.obj === 'All' || r.Objective === f.obj) &&
-    (f.type === 'All' || r.Type === f.type) && (f.camp === 'All' || r.Campaign === f.camp));
+const state = { camps: new Set(), focus: null, sortKey: 'Spend', sortDir: -1, funnelScale: 'true' };
+const cmpOn = () => $('cmpOn').checked;
+function F() { return { channel: $('channel').value, camps: state.camps }; }
+/* opts.ignoreChannel / opts.ignoreCamps let a chart show every item of its own dimension */
+function pick(range, f, opts) {
+  opts = opts || {};
+  return CD.filter(r => inR(r.Day, range) &&
+    (opts.ignoreChannel || f.channel === 'All' || r.Channel === f.channel) &&
+    (opts.ignoreCamps || !f.camps.size || f.camps.has(r.Campaign)));
 }
-const BASE = ['Spend','Impressions','Clicks','Installs','ESign','AO'];
+const BASE = ['Spend','Impressions','Clicks','Installs','Leads','AO','Traded'];
 const div = (a, b) => b ? a / b : null;   // null shows as "—" (no divide-by-zero)
 function agg(rows) {
   const o = {}; BASE.forEach(k => o[k] = 0);
   rows.forEach(r => BASE.forEach(k => o[k] += Number(r[k] || 0)));
-  o.CTR       = div(o.Clicks,   o.Impressions);  // Clicks / Impressions
-  o.CPC       = div(o.Spend,    o.Clicks);       // Cost / Clicks
-  o.CPI       = div(o.Spend,    o.Installs);     // Cost / Installs
-  o.C2I       = div(o.Installs, o.Clicks);       // Installs / Clicks
-  o.ESign_CAC = div(o.Spend,    o.ESign);        // Cost / E-Sign
-  o.I2AO      = div(o.AO,       o.Installs);     // Account Open / Installs
-  o.E2AO      = div(o.AO,       o.ESign);        // Account Open / E-Sign
-  o.AO_CAC    = div(o.Spend,    o.AO);           // Cost / Account Open
+  o.CTR      = div(o.Clicks,   o.Impressions);  // Clicks / Impressions
+  o.CPC      = div(o.Spend,    o.Clicks);       // Cost / Clicks
+  o.CPI      = div(o.Spend,    o.Installs);     // Cost / Installs
+  o.C2I      = div(o.Installs, o.Clicks);       // Installs / Clicks
+  o.Lead_CAC = div(o.Spend,    o.Leads);        // Cost / Leads
+  o.I2AO     = div(o.AO,       o.Installs);     // Account Open / Installs
+  o.L2AO     = div(o.AO,       o.Leads);        // Account Open / Leads
+  o.AO_CAC   = div(o.Spend,    o.AO);           // Cost / Account Open
+  o.AO2T     = div(o.Traded,   o.AO);           // Traded AO / Account Open
+  o.T_CAC    = div(o.Spend,    o.Traded);       // Cost / Traded AO
   return o;
 }
+function groupBy(rows, key) { const g = {}; rows.forEach(r => (g[r[key]] = g[r[key]] || []).push(r)); return g; }
 
 /* ---------- formatting ---------- */
 const bad = x => x == null || !isFinite(x);
 const money = x => bad(x) ? '—' : '₹' + Math.round(x).toLocaleString('en-IN');
 const unit = x => bad(x) ? '—' : '₹' + x.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const num = x => bad(x) ? '—' : Math.round(x).toLocaleString('en-IN');
-const rate = x => bad(x) ? '—' : RATIO_DISPLAY === 'percent' ? (x * 100).toFixed(2) + '%' : x.toFixed(RATIO_DECIMALS);
+const rate = x => bad(x) ? '—' : RATIO_DISPLAY === 'percent' ? (x * 100).toFixed(RATIO_DECIMALS) + '%' : x.toFixed(RATIO_DECIMALS);
 function compact(v) {
   if (bad(v)) return '';
   const a = Math.abs(v);
@@ -353,7 +447,14 @@ const FMT = { money, unit, num, rate };
 function delta(a, b, lower) {
   if (bad(a) || bad(b) || b === 0) return '';
   const d = (a - b) / b, good = lower ? d < 0 : d > 0;
+  if (Math.abs(d) < 1e-12) return '<span>0.0%</span>';
   return '<span class="' + (good ? 'up' : 'down') + '">' + (d >= 0 ? '↑ ' : '↓ ') + (Math.abs(d) * 100).toFixed(1) + '%</span>';
+}
+function deltaPP(a, b) {
+  if (bad(a) || bad(b)) return '';
+  const d = a - b, txt = RATIO_DISPLAY === 'percent' ? Math.abs(d * 100).toFixed(2) + ' pp' : Math.abs(d).toFixed(RATIO_DECIMALS);
+  if (Math.abs(d) < 1e-12) return '<span>0.00 pp</span>';
+  return '<span class="' + (d > 0 ? 'up' : 'down') + '">' + (d > 0 ? '↑ ' : '↓ ') + txt + '</span>';
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -367,19 +468,21 @@ const METRICS = [
   ['Installs', 'Installs', 'num', false, ''],
   ['Cost / Install', 'CPI', 'unit', true, 'Cost ÷ Installs'],
   ['Click to Install', 'C2I', 'rate', false, 'Installs ÷ Clicks'],
-  ['E-Sign', 'ESign', 'num', false, ''],
-  ['E-Sign CAC', 'ESign_CAC', 'unit', true, 'Cost ÷ E-Sign'],
+  ['Leads', 'Leads', 'num', false, ''],
+  ['Lead CAC', 'Lead_CAC', 'unit', true, 'Cost ÷ Leads'],
   ['Account Open', 'AO', 'num', false, ''],
   ['Install to AO %', 'I2AO', 'rate', false, 'Account Open ÷ Installs'],
-  ['E-Sign to Account Open', 'E2AO', 'rate', false, 'Account Open ÷ E-Sign'],
-  ['Account Open CAC', 'AO_CAC', 'unit', true, 'Cost ÷ Account Open']
+  ['Lead to Account Open', 'L2AO', 'rate', false, 'Account Open ÷ Leads'],
+  ['Account Open CAC', 'AO_CAC', 'unit', true, 'Cost ÷ Account Open'],
+  ['Traded AO', 'Traded', 'num', false, ''],
+  ['AO to Traded %', 'AO2T', 'rate', false, 'Traded AO ÷ Account Open'],
+  ['Traded AO CAC', 'T_CAC', 'unit', true, 'Cost ÷ Traded AO']
 ];
 const mDef = key => METRICS.find(m => m[1] === key) || METRICS[0];
-const labelFor = (def, v) => def[2] === 'money' ? '₹' + compact(v) : def[2] === 'unit' ? (v >= 1000 ? '₹' + compact(v) : '₹' + v.toFixed(0)) : def[2] === 'rate' ? rate(v) : compact(v);
-const tickFor = def => v => def[2] === 'rate' ? (RATIO_DISPLAY === 'percent' ? (v * 100).toFixed(1) + '%' : +v.toFixed(4)) : compact(v);
-const DIMS = { campaign: ['Campaign', 'camp'], channel: ['Channel', 'channel'], objective: ['Objective', 'obj'], type: ['Type', 'type'] };
+const labelFor = (def, v) => bad(v) ? '' : def[2] === 'money' ? '₹' + compact(v) : def[2] === 'unit' ? (v >= 1000 ? '₹' + compact(v) : '₹' + v.toFixed(0)) : def[2] === 'rate' ? rate(v) : compact(v);
+const tickFor = def => v => def[2] === 'rate' ? (RATIO_DISPLAY === 'percent' ? +(v * 100).toFixed(2) + '%' : +v.toFixed(4)) : (def[2] === 'money' || def[2] === 'unit' ? '₹' : '') + compact(v);
+const COLORS = { cur: '#1a8cff', curDim: '#c9e2ff', cmp: '#f28c28', cmpDim: '#fbd9b8', curInk: '#0f5fb8', cmpInk: '#b45f0e' };
 
-const state = { focus: null, sortKey: 'Spend', sortDir: -1, funnelScale: 'true' };
 const charts = {};
 const killChart = k => { if (charts[k]) { charts[k].destroy(); charts[k] = null; } };
 
@@ -390,13 +493,18 @@ Chart.register({
   id: 'valueLabels',
   afterDatasetsDraw(chart, args, o) {
     if (!o || !o.fmt) return;
-    const meta = chart.getDatasetMeta(0), ds = chart.data.datasets[0].data, ctx = chart.ctx;
-    meta.data.forEach((el, i) => {
-      const v = ds[i]; if (bad(v)) return;
-      ctx.save(); ctx.fillStyle = '#344054'; ctx.font = '600 10px "Segoe UI",Arial,sans-serif';
-      if (o.horizontal) { ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(o.fmt(v), el.x + 4, el.y); }
-      else { ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(o.fmt(v), el.x, el.y - (o.offset || 3)); }
-      ctx.restore();
+    const ctx = chart.ctx;
+    chart.data.datasets.forEach((ds, di) => {
+      if (o.only != null && di !== o.only) return;
+      const meta = chart.getDatasetMeta(di); if (meta.hidden) return;
+      meta.data.forEach((el, i) => {
+        const v = ds.data[i]; if (bad(v)) return;
+        ctx.save(); ctx.fillStyle = (o.colors && o.colors[di]) || '#344054'; ctx.font = '600 10px "Segoe UI",Arial,sans-serif';
+        if (o.horizontal) { ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(o.fmt(v), el.x + 4, el.y); }
+        else if (o.below === di) { ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.fmt(v), el.x, el.y + (o.offset || 3)); }
+        else { ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(o.fmt(v), el.x, el.y - (o.offset || 3)); }
+        ctx.restore();
+      });
     });
   }
 }, {
@@ -417,8 +525,35 @@ Chart.register({
   }
 });
 const hoverPointer = (e, els) => { if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; };
+function daysOf(r) { const out = []; for (let d = r[0]; d <= r[1]; d = addDays(d, 1)) out.push(d); return out; }
 
-/* ---------- filters ---------- */
+/* ---------- campaign multi-select ---------- */
+function campUniverse() {
+  const ch = $('channel').value, m = {};
+  CD.forEach(r => { if (ch === 'All' || r.Channel === ch) { (m[r.Campaign] = m[r.Campaign] || new Set()).add(r.Channel); } });
+  return Object.keys(m).sort((a, b) => a.localeCompare(b)).map(k => ({ name: k, ch: [...m[k]].join(', ') }));
+}
+function pruneCamps() { const u = new Set(campUniverse().map(x => x.name)); [...state.camps].forEach(c => { if (!u.has(c)) state.camps.delete(c); }); }
+function updateCampBtn() {
+  const n = state.camps.size;
+  $('campBtnTxt').textContent = n === 0 ? 'All campaigns' : n === 1 ? [...state.camps][0] : n + ' campaigns selected';
+  $('campBtn').title = n ? [...state.camps].join('\n') : 'All campaigns';
+}
+function renderCampList() {
+  const q = $('campSearch').value.trim().toLowerCase();
+  const list = campUniverse().filter(x => !q || x.name.toLowerCase().includes(q));
+  $('campList').innerHTML = list.length ? list.map(x => '<label><input type="checkbox" value="' + esc(x.name) + '"' + (state.camps.has(x.name) ? ' checked' : '') + '><span>' + esc(x.name) + '</span><span class="ch">' + esc(x.ch) + '</span></label>').join('') : '<div class="note" style="padding:6px">No campaigns match.</div>';
+  $('campCnt').textContent = state.camps.size ? state.camps.size + ' selected' : 'none selected = all';
+  $('campList').querySelectorAll('input').forEach(cb => cb.onchange = () => {
+    if (cb.checked) state.camps.add(cb.value); else state.camps.delete(cb.value);
+    $('campCnt').textContent = state.camps.size ? state.camps.size + ' selected' : 'none selected = all';
+    updateCampBtn(); render();
+  });
+  updateCampBtn();
+}
+function toggleCamp(c) { if (state.camps.has(c)) state.camps.delete(c); else state.camps.add(c); renderCampList(); render(); }
+
+/* ---------- filter helpers ---------- */
 function fillSelect(id, items, allLabel) {
   const s = $(id); s.innerHTML = '';
   const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; s.appendChild(o); };
@@ -431,13 +566,19 @@ function setSingleDay(d) {
   syncRangeInputs(); render();
 }
 function syncRangeInputs() {
+  const on = cmpOn();
   document.querySelectorAll('.rngA').forEach(e => e.classList.toggle('hide', $('period').value !== 'custom'));
-  document.querySelectorAll('.rngB').forEach(e => e.classList.toggle('hide', $('compare').value !== 'custom'));
+  document.querySelectorAll('.cmpOnly').forEach(e => e.classList.toggle('hide', !on));
+  document.querySelectorAll('.rngB').forEach(e => e.classList.toggle('hide', !on || $('cmpMode').value !== 'custom'));
+  document.querySelectorAll('.cmpLegend').forEach(e => e.classList.toggle('hide', !on));
+  $('cmpState').textContent = on ? 'On' : 'Off';
+  $('cmpState').style.color = on ? 'var(--cmp-ink)' : 'var(--muted)';
 }
 function resetAll() {
-  $('period').value = DEFAULT_PERIOD; ['channel', 'obj', 'type', 'camp'].forEach(k => $(k).value = 'All'); $('compare').value = 'auto';
+  $('period').value = DEFAULT_PERIOD; $('channel').value = 'All'; state.camps.clear(); $('campSearch').value = '';
+  $('cmpOn').checked = false; $('cmpMode').value = 'prev';
   state.focus = null; state.sortKey = 'Spend'; state.sortDir = -1; $('distMetric').value = 'Spend'; $('viewBy').value = 'campaign';
-  syncRangeInputs(); render();
+  syncRangeInputs(); renderCampList(); render();
 }
 
 /* ---------- renderers ---------- */
@@ -445,33 +586,41 @@ function renderCtx(cur, cmp) {
   const f = F(), chips = [];
   if ($('period').value !== DEFAULT_PERIOD) chips.push(['period', 'Dates: ' + rangeLbl(cur)]);
   if (f.channel !== 'All') chips.push(['channel', 'Channel: ' + f.channel]);
-  if (f.obj !== 'All') chips.push(['obj', 'Objective: ' + f.obj]);
-  if (f.type !== 'All') chips.push(['type', 'Type: ' + f.type]);
-  if (f.camp !== 'All') chips.push(['camp', 'Campaign: ' + f.camp]);
-  $('ctx').innerHTML = 'Showing <b>' + rangeLbl(cur) + '</b> · compared with <b>' + rangeLbl(cmp) + '</b>' +
+  if (f.camps.size) chips.push(['camps', 'Campaigns: ' + (f.camps.size === 1 ? [...f.camps][0] : f.camps.size + ' selected')]);
+  $('ctx').innerHTML = 'Showing <b class="cb">' + rangeLbl(cur) + '</b>' + (cmp ? ' · compared with <b class="co">' + rangeLbl(cmp) + '</b>' : ' · comparison off') +
     (chips.length ? ' · Active filters: ' + chips.map(c => '<span class="chip" data-clear="' + c[0] + '">' + esc(c[1]) + ' ✕</span>').join(' ') : '');
   $('ctx').querySelectorAll('[data-clear]').forEach(c => c.onclick = () => {
     const k = c.dataset.clear;
-    if (k === 'period') { $('period').value = DEFAULT_PERIOD; syncRangeInputs(); } else $(k).value = 'All';
+    if (k === 'period') { $('period').value = DEFAULT_PERIOD; syncRangeInputs(); }
+    else if (k === 'camps') { state.camps.clear(); renderCampList(); }
+    else { $(k).value = 'All'; pruneCamps(); renderCampList(); }
     render();
   });
 }
 function renderCards(a, p) {
   $('kpis').innerHTML = METRICS.map(c =>
     '<div class="card kpi" title="' + esc(c[4] || c[0]) + '"><div class="l">' + c[0] + '</div><div class="v">' + FMT[c[2]](a[c[1]]) + '</div>' +
-    '<div class="f">' + (c[4] && c[4] !== 'Amount Spent' ? esc(c[4]) : '&nbsp;') + '</div><div class="d">' + delta(a[c[1]], p[c[1]], c[3]) + '</div></div>').join('');
+    '<div class="f">' + (c[4] && c[4] !== 'Amount Spent' ? esc(c[4]) : '&nbsp;') + '</div>' +
+    (p ? '<div class="cv">vs ' + FMT[c[2]](p[c[1]]) + '</div><div class="d">' + (c[2] === 'rate' ? deltaPP(a[c[1]], p[c[1]]) : delta(a[c[1]], p[c[1]], c[3])) + '</div>' : '') +
+    '</div>').join('');
 }
 
-const STAGES = [['Impressions', 'Impressions'], ['Clicks', 'Clicks'], ['Installs', 'Installs'], ['E-Sign', 'ESign'], ['Account Open', 'AO']];
-function renderFunnel(a) {
-  const top = a.Impressions || 0, mode = state.funnelScale;
+const STAGES = [['Impressions', 'Impressions'], ['Clicks', 'Clicks'], ['Installs', 'Installs'], ['Leads', 'Leads'], ['Account Open', 'AO'], ['Traded AO', 'Traded']];
+function renderFunnel(a, p) {
+  const mode = state.funnelScale, ref = Math.max(a.Impressions || 0, p ? (p.Impressions || 0) : 0);
+  const width = v => {
+    let w = mode === 'log' ? (ref ? 100 * Math.log10(1 + v) / Math.log10(1 + ref) : 0) : (ref ? v / ref * 100 : 0);
+    return Math.min(100, Math.max(w, 1.5));
+  };
   $('funnel').innerHTML = STAGES.map((s, i) => {
-    const v = a[s[1]] || 0, prev = i ? (a[STAGES[i - 1][1]] || 0) : null, ofTop = top ? v / top : null;
-    let w = mode === 'log' ? (top ? 100 * Math.log10(1 + v) / Math.log10(1 + top) : 0) : (ofTop == null ? 0 : ofTop * 100);
-    w = Math.min(100, Math.max(w, 1.5));
-    const meta = i === 0 ? 'Top of funnel' : s[0] + ' ÷ ' + STAGES[i - 1][0] + ': ' + rate(div(v, prev));
-    return '<div class="fstage' + (state.focus === s[1] ? ' active' : '') + '" data-k="' + s[1] + '"><div class="fhead"><span>' + s[0] + '</span><span class="fv">' + num(v) + '</span></div>' +
-      '<div class="ftrack"><div class="fbar" style="width:' + w.toFixed(2) + '%"></div></div><div class="fmeta">' + meta + '</div></div>';
+    const v = a[s[1]] || 0, prev = i ? (a[STAGES[i - 1][1]] || 0) : null;
+    const pv = p ? (p[s[1]] || 0) : null, pprev = p && i ? (p[STAGES[i - 1][1]] || 0) : null;
+    const meta = i === 0 ? 'Top of funnel' : s[0] + ' ÷ ' + STAGES[i - 1][0] + ': ' + rate(div(v, prev)) + (p ? ' <span class="co">· vs ' + rate(div(pv, pprev)) + '</span>' : '');
+    return '<div class="fstage' + (state.focus === s[1] ? ' active' : '') + '" data-k="' + s[1] + '"><div class="fhead"><span>' + s[0] + '</span><span><span class="fv">' + num(v) + '</span>' +
+      (p ? ' <span class="fvc">vs ' + num(pv) + '</span>' : '') + '</span></div>' +
+      '<div class="ftrack"><div class="fbar" style="width:' + width(v).toFixed(2) + '%"></div></div>' +
+      (p ? '<div class="ftrack"><div class="fbar c" style="width:' + width(pv).toFixed(2) + '%"></div></div>' : '') +
+      '<div class="fmeta">' + meta + '</div></div>';
   }).join('');
   $('funnel').querySelectorAll('.fstage').forEach(el => el.onclick = () => {
     const k = el.dataset.k;
@@ -481,70 +630,126 @@ function renderFunnel(a) {
   });
 }
 
-function trendChart(key, canvasId, win, metricKey, f, cur) {
-  const days = []; for (let d = win[0]; d <= win[1]; d = addDays(d, 1)) days.push(d);
-  const def = mDef(metricKey), byDay = {};
-  pick(win, f).forEach(r => (byDay[r.Day] = byDay[r.Day] || []).push(r));
-  const vals = days.map(d => { const v = agg(byDay[d] || [])[metricKey]; return bad(v) ? null : v; });
-  const fmt = FMT[def[2]];
-  const allSel = cur[0] <= win[0] && cur[1] >= win[1];
-  const isSel = d => allSel || inR(d, cur);
+/* line chart: blue = selected days, orange = comparison days lined up day 1 vs day 1 */
+function lineChart(key, canvasId, curDays, cmpDays, metricKey, f, clickable) {
+  const def = mDef(metricKey), fmt = FMT[def[2]];
+  const L = Math.max(curDays.length, cmpDays ? cmpDays.length : 0);
+  const cg = groupBy(pick([curDays[0], curDays[curDays.length - 1]], f), 'Day');
+  const pg = cmpDays && cmpDays.length ? groupBy(pick([cmpDays[0], cmpDays[cmpDays.length - 1]], f), 'Day') : {};
+  const valOf = (g, d) => { if (!d) return null; const v = agg(g[d] || [])[metricKey]; return bad(v) ? null : v; };
+  const cd = [], pd = [], labels = [];
+  for (let i = 0; i < L; i++) {
+    const d = curDays[i], e = cmpDays ? cmpDays[i] : null;
+    cd.push(valOf(cg, d)); pd.push(valOf(pg, e));
+    labels.push(d ? lbl(d) : '(' + lbl(e) + ')');
+  }
+  const dense = L > 45, showLabels = L <= 16;
+  const ds = [{ label: 'Selected period', data: cd, borderColor: COLORS.cur, backgroundColor: COLORS.cur, borderWidth: 2.5, tension: 0.25, spanGaps: false,
+    pointRadius: dense ? 0 : 4, pointHoverRadius: 6, pointBackgroundColor: COLORS.cur }];
+  if (cmpDays) ds.push({ label: 'Comparison period', data: pd, borderColor: COLORS.cmp, backgroundColor: COLORS.cmp, borderWidth: 2.5, tension: 0.25, spanGaps: false,
+    pointRadius: dense ? 0 : 3.5, pointHoverRadius: 6, pointBackgroundColor: COLORS.cmp, borderDash: [] });
   killChart(key);
   charts[key] = new Chart($(canvasId), {
     type: 'line',
-    data: { labels: days.map(lbl), datasets: [{
-      data: vals, borderColor: '#1a8cff', borderWidth: 2.5, tension: 0.25, fill: false, spanGaps: false,
-      pointBackgroundColor: days.map(d => isSel(d) ? '#1a8cff' : '#ffffff'), pointBorderColor: '#1a8cff', pointBorderWidth: 2,
-      pointRadius: days.map(d => isSel(d) ? 5 : 3), pointHoverRadius: 7
-    }] },
+    data: { labels, datasets: ds },
     options: {
       responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
       interaction: { mode: 'index', intersect: false },
-      layout: { padding: { top: 18, right: 14 } },
-      plugins: { legend: { display: false }, valueLabels: days.length <= 16 ? { fmt: v => labelFor(def, v), offset: 9 } : false,
-        tooltip: { callbacks: { title: i => lblFull(days[i[0].dataIndex]), label: c => def[0] + ': ' + fmt(c.raw) } } },
+      layout: { padding: { top: 18, right: 14, bottom: cmpDays ? 14 : 0 } },
+      plugins: {
+        legend: { display: !!cmpDays, position: 'top', labels: { boxWidth: 12, boxHeight: 12 } },
+        valueLabels: showLabels ? { fmt: v => labelFor(def, v), offset: 8, below: 1, colors: [COLORS.curInk, COLORS.cmpInk] } : false,
+        tooltip: { callbacks: {
+          title: () => '',
+          label: c => { const d = c.datasetIndex === 0 ? curDays[c.dataIndex] : cmpDays[c.dataIndex]; return d ? (c.datasetIndex === 0 ? 'Selected ' : 'Comparison ') + lblFull(d) + ': ' + fmt(c.raw) : null; }
+        } }
+      },
       scales: { x: { offset: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } }, y: { beginAtZero: true, ticks: { callback: tickFor(def) } } },
-      onClick: (e, els) => { if (els.length) { const d = days[els[0].index]; setTimeout(() => setSingleDay(d), 0); } },
-      onHover: hoverPointer
+      onClick: clickable ? (e, els) => { if (els.length) { const d = curDays[els[0].index]; if (d) setTimeout(() => setSingleDay(d), 0); } } : undefined,
+      onHover: clickable ? hoverPointer : undefined
     }
   });
 }
-function renderTrends(f, cur) {
-  const w7 = [addDays(MAXD, -6), MAXD], wm = [MAXD.slice(0, 7) + '-01', MAXD];
-  $('t7').textContent = 'Last 7 days · ' + lbl(w7[0]) + ' – ' + lbl(w7[1]);
-  $('tMtd').textContent = 'Month to date · ' + lbl(wm[0]) + ' – ' + lbl(wm[1]);
-  trendChart('t7', 'c7', w7, $('tm7').value, f, cur);
-  trendChart('tM', 'cM', wm, $('tmM').value, f, cur);
+/* a single-day selection shows the 7 days ending on that day so the trend has a shape */
+const trendWin = r => r[0] === r[1] ? [addDays(r[1], -6), r[1]] : r;
+function renderTrends(f, cur, cmp) {
+  const w = trendWin(cur), cw = cmp ? trendWin(cmp) : null;
+  $('tTrend').innerHTML = 'Trend · ' + (cur[0] === cur[1] ? '7 days to ' + lbl(cur[1]) : lbl(w[0]) + ' – ' + lbl(w[1])) +
+    (cw ? ' <span class="co">vs ' + lbl(cw[0]) + ' – ' + lbl(cw[1]) + '</span>' : '');
+  lineChart('trend', 'cT', daysOf(w), cw ? daysOf(cw) : null, $('tmT').value, f, true);
+
+  const end = cur[1], mStart = end.slice(0, 7) + '-01', dayN = +end.slice(8);
+  let pm = null;
+  if (cmp) {
+    const y = +end.slice(0, 4), m = +end.slice(5, 7), py = m === 1 ? y - 1 : y, pmo = m === 1 ? 12 : m - 1;
+    const pStart = py + '-' + pad2(pmo) + '-01', pdim = daysInMonth(pStart);
+    pm = [pStart, py + '-' + pad2(pmo) + '-' + pad2(Math.min(dayN, pdim))];
+  }
+  $('tMtd').innerHTML = 'Month to date · ' + lbl(mStart) + ' – ' + lbl(end) + (pm ? ' <span class="co">vs same days of ' + MON[+pm[0].slice(5, 7) - 1] + ' ' + pm[0].slice(0, 4) + '</span>' : '');
+  lineChart('mtd', 'cM', daysOf([mStart, end]), pm ? daysOf(pm) : null, $('tmM').value, f, true);
 }
 
-function renderDist(cur, f) {
-  const viewBy = $('viewBy').value, mk = $('distMetric').value, def = mDef(mk), dim = DIMS[viewBy];
-  const ff = Object.assign({}, f, { [dim[1]]: 'All' });
-  const groups = {};
-  pick(cur, ff).forEach(r => (groups[r[dim[0]]] = groups[r[dim[0]]] || []).push(r));
-  let items = Object.keys(groups).map(k => ({ k, v: agg(groups[k])[mk] })).filter(x => !bad(x.v));
-  items.sort((a, b) => b.v - a.v);
-  const total = items.length; if (viewBy === 'campaign') items = items.slice(0, 10);
-  $('distNote').textContent = viewBy === 'campaign' && total > 10 ? 'Top 10 of ' + total : '';
-  const selKey = f[dim[1]], hasSel = selKey !== 'All';
-  const colors = items.map(x => (!hasSel || x.k === selKey) ? '#1a8cff' : '#c9e2ff');
-  const fmt = FMT[def[2]];
+function renderDist(cur, cmp, f) {
+  const viewBy = $('viewBy').value, mk = $('distMetric').value, def = mDef(mk), fmt = FMT[def[2]];
+  const box = $('dInner'), scroller = $('dScroll');
+  let labels = [], keys = [], cv = [], pv = [], highlight = () => true, onPick, horizontal = true;
+  if (viewBy === 'day') {
+    horizontal = false;
+    const cd = daysOf(trendWin(cur)), pd = cmp ? daysOf(trendWin(cmp)) : null, L = Math.max(cd.length, pd ? pd.length : 0);
+    const cg = groupBy(pick(trendWin(cur), f), 'Day'), pg = cmp ? groupBy(pick(trendWin(cmp), f), 'Day') : {};
+    for (let i = 0; i < L; i++) {
+      keys.push(cd[i] || null);
+      labels.push(cd[i] ? lbl(cd[i]) : '(' + lbl(pd[i]) + ')');
+      const a = cd[i] ? agg(cg[cd[i]] || [])[mk] : null, b = pd && pd[i] ? agg(pg[pd[i]] || [])[mk] : null;
+      cv.push(bad(a) ? null : a); pv.push(bad(b) ? null : b);
+    }
+    onPick = i => { if (keys[i]) setSingleDay(keys[i]); };
+    $('distNote').textContent = (cur[0] === cur[1] ? 'Showing the 7 days to ' + lblFull(cur[1]) + '. ' : '') + 'Click a bar to filter to that day.' + (cmp ? ' Comparison days are lined up day 1 vs day 1.' : '');
+    var tipTitle = i => (cd[i] ? 'Selected ' + lblFull(cd[i]) : '') + (pd && pd[i] ? (cd[i] ? ' · ' : '') + 'Comparison ' + lblFull(pd[i]) : '');
+  } else {
+    const isCamp = viewBy === 'campaign', key = isCamp ? 'Campaign' : 'Channel';
+    const opts = isCamp ? { ignoreCamps: true } : { ignoreChannel: true };
+    const cg = groupBy(pick(cur, f, opts), key), pg = cmp ? groupBy(pick(cmp, f, opts), key) : {};
+    const all = [...new Set(Object.keys(cg).concat(Object.keys(pg)))];
+    const items = all.map(k => ({ k, a: agg(cg[k] || [])[mk], b: cmp ? agg(pg[k] || [])[mk] : null }))
+      .filter(x => !bad(x.a) || !bad(x.b))
+      .sort((x, y) => (bad(y.a) ? -Infinity : y.a) - (bad(x.a) ? -Infinity : x.a) || (bad(y.b) ? -Infinity : y.b) - (bad(x.b) ? -Infinity : x.b));
+    const selFirst = isCamp ? f.camps : (f.channel === 'All' ? new Set() : new Set([f.channel]));
+    if (selFirst.size) items.sort((x, y) => (selFirst.has(y.k) ? 1 : 0) - (selFirst.has(x.k) ? 1 : 0));   // stable: selected items first, each group still by value
+    keys = items.map(x => x.k); labels = keys.map(k => k.length > 34 ? k.slice(0, 33) + '…' : k);
+    cv = items.map(x => bad(x.a) ? null : x.a); pv = items.map(x => bad(x.b) ? null : x.b);
+    const sel = isCamp ? f.camps : (f.channel === 'All' ? new Set() : new Set([f.channel]));
+    highlight = i => !sel.size || sel.has(keys[i]);
+    onPick = i => {
+      if (isCamp) toggleCamp(keys[i]);
+      else { const s = $('channel'); s.value = s.value === keys[i] ? 'All' : keys[i]; pruneCamps(); renderCampList(); render(); }
+    };
+    $('distNote').textContent = (isCamp ? 'All campaigns' : 'All channels') + ' shown (' + keys.length + ')' + (selFirst.size ? ', selected first' : '') + '; scroll to see more. Click a bar to ' + (isCamp ? 'add or remove that campaign from the selection.' : 'filter to that channel. Click again to clear.');
+    var tipTitle = i => keys[i];
+  }
+  const n = labels.length, per = cmp ? 34 : 24;
+  if (horizontal) { box.style.width = '100%'; box.style.height = Math.max(240, n * per + 50) + 'px'; }
+  else { const w = n * (cmp ? 40 : 26) + 90; box.style.width = 'max(100%, ' + w + 'px)'; box.style.height = '300px'; }
+  scroller.style.overflowX = horizontal ? 'hidden' : 'auto';
+  const ds = [{ label: 'Selected period', data: cv, backgroundColor: cv.map((_, i) => highlight(i) ? COLORS.cur : COLORS.curDim), borderRadius: 3, maxBarThickness: horizontal ? 14 : 18 }];
+  if (cmp) ds.push({ label: 'Comparison period', data: pv, backgroundColor: pv.map((_, i) => highlight(i) ? COLORS.cmp : COLORS.cmpDim), borderRadius: 3, maxBarThickness: horizontal ? 14 : 18 });
   killChart('dist');
   charts.dist = new Chart($('cD'), {
     type: 'bar',
-    data: { labels: items.map(x => x.k.length > 30 ? x.k.slice(0, 29) + '…' : x.k), datasets: [{ data: items.map(x => x.v), backgroundColor: colors, borderRadius: 3, maxBarThickness: 22 }] },
+    data: { labels, datasets: ds },
     options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
-      interaction: { mode: 'nearest', axis: 'y', intersect: false },
-      layout: { padding: { right: 64 } },
-      plugins: { legend: { display: false }, valueLabels: { horizontal: true, fmt: v => labelFor(def, v) },
-        tooltip: { callbacks: { title: i => items[i[0].dataIndex].k, label: c => def[0] + ': ' + fmt(c.raw) } } },
-      scales: { x: { beginAtZero: true, ticks: { callback: tickFor(def) } }, y: { grid: { display: false } } },
-      onClick: (e, els) => {
-        if (!els.length) return;
-        const k = items[els[0].index].k, sel = $(dim[1]);
-        setTimeout(() => { sel.value = sel.value === k ? 'All' : k; render(); }, 0);
+      indexAxis: horizontal ? 'y' : 'x', responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
+      interaction: { mode: 'index', axis: horizontal ? 'y' : 'x', intersect: false },
+      layout: { padding: horizontal ? { right: 70 } : { top: 20 } },
+      plugins: {
+        legend: { display: false },
+        valueLabels: (horizontal || n <= 31) ? { horizontal, fmt: v => labelFor(def, v), colors: [COLORS.curInk, COLORS.cmpInk] } : false,
+        tooltip: { callbacks: { title: i => tipTitle(i[0].dataIndex), label: c => (c.datasetIndex === 0 ? 'Selected: ' : 'Comparison: ') + fmt(c.raw) } }
       },
+      scales: horizontal
+        ? { x: { beginAtZero: true, position: 'top', ticks: { callback: tickFor(def) } }, y: { grid: { display: false }, ticks: { autoSkip: false } } }
+        : { y: { beginAtZero: true, ticks: { callback: tickFor(def) } }, x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 60, minRotation: 0 } } },
+      onClick: (e, els) => { if (els.length) { const i = els[0].index; setTimeout(() => onPick(i), 0); } },
       onHover: hoverPointer
     }
   });
@@ -558,7 +763,7 @@ function renderGauge(f, cur) {
   $('gMonth').textContent = monthName + ' · 1–' + dayN + ' ' + MON[+end.slice(5, 7) - 1];
   const spent = agg(pick([mStart, end], f)).Spend;
   const U = limitVal('limUnder'), O = limitVal('limOver'), pr = $('prorate').checked;
-  const filt = f.channel !== 'All' || f.obj !== 'All' || f.type !== 'All' || f.camp !== 'All';
+  const filt = f.channel !== 'All' || f.camps.size > 0;
   killChart('gauge');
   const box = $('gbox');
   if (U == null || O == null || !(O > U)) {
@@ -587,9 +792,10 @@ function renderGauge(f, cur) {
 }
 
 const COLS = [['Campaign', null, null], ['Channel', null, null]].concat(METRICS.map(m => [m[0], m[1], m[2]]));
-function renderTable(rows, f) {
-  const by = {}; rows.forEach(r => (by[r.Campaign] = by[r.Campaign] || []).push(r));
-  const list = Object.keys(by).map(k => ({ k, ch: [...new Set(by[k].map(r => r.Channel))].join(', '), a: agg(by[k]) }));
+function renderTable(cur, cmp, f) {
+  const cg = groupBy(pick(cur, f), 'Campaign'), pg = cmp ? groupBy(pick(cmp, f), 'Campaign') : {};
+  const names = [...new Set(Object.keys(cg).concat(Object.keys(pg)))];
+  const list = names.map(k => ({ k, ch: [...new Set((cg[k] || []).concat(pg[k] || []).map(r => r.Channel))].join(', '), a: agg(cg[k] || []), b: cmp ? agg(pg[k] || []) : null }));
   const sk = state.sortKey, sd = state.sortDir;
   list.sort((x, y) => {
     if (sk === 'Campaign') return sd * x.k.localeCompare(y.k);
@@ -597,70 +803,80 @@ function renderTable(rows, f) {
     const xv = x.a[sk], yv = y.a[sk];
     return sd * ((bad(xv) ? -Infinity : xv) - (bad(yv) ? -Infinity : yv));
   });
-  const tot = agg(rows);
+  const tot = agg(pick(cur, f)), ptot = cmp ? agg(pick(cmp, f)) : null;
+  const cell = (c, a, b) => '<td><div class="c1">' + FMT[c[2]](a[c[1]]) + '</div>' + (b ? '<div class="c2">' + FMT[c[2]](b[c[1]]) + '</div>' : '') + '</td>';
   let h = '<thead><tr>' + COLS.map(c => { const k = c[1] || c[0]; return '<th data-k="' + k + '" class="' + (k === sk ? 'sorted' : '') + '">' + c[0] + (k === sk ? (sd < 0 ? ' ▼' : ' ▲') : '') + '</th>'; }).join('') + '</tr></thead><tbody>';
   list.forEach(x => {
-    h += '<tr class="row' + (f.camp === x.k ? ' sel' : '') + '" data-c="' + esc(x.k) + '"><td title="' + esc(x.k) + '">' + esc(x.k) + '</td><td><span class="seg">' + esc(x.ch) + '</span></td>' +
-      COLS.slice(2).map(c => '<td>' + FMT[c[2]](x.a[c[1]]) + '</td>').join('') + '</tr>';
+    h += '<tr class="row' + (f.camps.has(x.k) ? ' sel' : '') + '" data-c="' + esc(x.k) + '"><td title="' + esc(x.k) + '">' + esc(x.k) + '</td><td><span class="seg">' + esc(x.ch) + '</span></td>' +
+      COLS.slice(2).map(c => cell(c, x.a, x.b)).join('') + '</tr>';
   });
-  h += '</tbody><tfoot><tr><td>Total (' + list.length + ' campaigns)</td><td></td>' + COLS.slice(2).map(c => '<td>' + FMT[c[2]](tot[c[1]]) + '</td>').join('') + '</tr></tfoot>';
+  h += '</tbody><tfoot><tr><td>Total (' + list.length + ' campaigns)</td><td></td>' + COLS.slice(2).map(c => cell(c, tot, ptot)).join('') + '</tr></tfoot>';
   $('tbl').innerHTML = h;
+  $('tbl').classList.toggle('cmpmode', !!cmp);
+  $('tblNote').innerHTML = (cmp ? '<span style="color:#0f6fd6;font-weight:700">Blue = selected period</span> · <span style="color:var(--cmp-ink);font-weight:700">Orange = comparison period</span>. ' : '') +
+    'Click a column to sort. Click a row to add or remove that campaign from the selection. Scroll sideways for more columns.';
   $('tbl').querySelectorAll('th[data-k]').forEach(th => th.onclick = () => {
     const k = th.dataset.k; if (state.sortKey === k) state.sortDir *= -1; else { state.sortKey = k; state.sortDir = (k === 'Campaign' || k === 'Channel') ? 1 : -1; }
-    renderTable(rows, f);
+    renderTable(cur, cmp, f);
   });
-  $('tbl').querySelectorAll('tr.row').forEach(tr => tr.onclick = () => { const c = tr.dataset.c; $('camp').value = $('camp').value === c ? 'All' : c; render(); });
+  $('tbl').querySelectorAll('tr.row').forEach(tr => tr.onclick = () => toggleCamp(tr.dataset.c));
 }
 
 function renderNotes() {
   const M = META, T = M.totals, nn = M.nonNumeric;
   const issues = [];
-  if (M.zeroSpendConv) issues.push(M.zeroSpendConv + ' row(s) have Installs / E-Sign / Account Open but ₹0 cost (' + Object.keys(M.zeroSpendConvByCh).map(k => esc(k) + ': ' + M.zeroSpendConvByCh[k]).join(', ') + '). Their conversions are included in totals, which lowers blended Cost/Install and CACs. Filter by channel to check.');
+  if (M.zeroSpendConv) issues.push(M.zeroSpendConv + ' row(s) outside the Direct channel have Installs / Leads / Account Open / Traded AO but ₹0 cost (' + Object.keys(M.zeroSpendConvByCh).map(k => esc(k) + ': ' + M.zeroSpendConvByCh[k]).join(', ') + '). Their conversions are included in totals, which lowers blended Cost / Install and CACs. Filter by channel to check.');
   if (M.blankName) issues.push(M.blankName + ' row(s) have no campaign name; shown as “' + BLANKNAME + '”.');
-  if (M.unmappedRows) issues.push(M.unmappedRows + ' row(s) have a blank or “-” Channel / Objective / Campaign Type (' + (M.unmappedCampaigns.length ? 'campaigns: ' + M.unmappedCampaigns.map(esc).join('; ') : 'no named campaign') + '); shown as “' + UNMAPPED + '”.');
-  if (M.errRows) issues.push(M.errRows + ' row(s) carry a spreadsheet error (e.g. #N/A, #REF!) in a mapping column; treated as unmapped.');
+  if (M.unmappedRows) issues.push(M.unmappedRows + ' row(s) have a blank, “-” or error Channel (' + (M.unmappedCampaigns.length ? 'campaigns: ' + M.unmappedCampaigns.map(esc).join('; ') : 'no named campaign') + '); shown as “' + UNMAPPED + '”.');
   if (M.dupPairs) issues.push(M.dupPairs + ' Day + Channel + Campaign combination(s) appear on more than one row. They are added together, so check they are not double-counted.');
-  if (M.nonNumericTotal) issues.push(M.nonNumericTotal + ' non-numeric cell(s) in numeric columns (' + Object.keys(nn).map(k => esc(k) + ': ' + nn[k]).join(', ') + ') were counted as 0.');
-  if (M.negatives) issues.push(M.negatives + ' negative value(s) in the numeric columns.');
-  if (M.skippedDate) issues.push(M.skippedDate + ' row(s) skipped because the Day could not be read as a date.');
+  if (M.nonNumericTotal) issues.push(M.nonNumericTotal + ' non-numeric cell(s) in number columns (' + Object.keys(nn).map(k => esc(k) + ': ' + nn[k]).join(', ') + ') were counted as 0.');
+  if (M.negatives) issues.push(M.negatives + ' negative value(s) in the number columns.');
+  if (M.skippedDate) issues.push(M.skippedDate + ' row(s) with numbers were skipped because the Day could not be read as a date (e.g. ' + M.skippedSamples.map(x => '“' + esc(x) + '”').join(', ') + '). They are NOT in any figure.');
+  if (M.dateOrder.dmy && M.dateOrder.mdy) issues.push('Text dates appear in both DD/MM and MM/DD order. Read as ' + (M.dateOrder.order === 'DMY' ? 'DD/MM/YYYY' : 'MM/DD/YYYY') + '; please make the Day column consistent.');
   const ch = Object.keys(M.byChannel).sort((a, b) => M.byChannel[b] - M.byChannel[a]).map(k => esc(k) + ' ' + money(M.byChannel[k])).join(' · ');
-  const formulas = METRICS.filter(m => m[2] === 'rate' || m[2] === 'unit').map(m => esc(m[0]) + ' = ' + esc(m[4])).join(' · ');
+  const formulas = METRICS.filter(m => m[2] === 'rate' || m[2] === 'unit').map(m => esc(m[0]) + ' = ' + esc(m[4]) + (m[2] === 'rate' && RATIO_DISPLAY === 'percent' ? ' × 100' : '')).join(' · ');
   $('notesBody').innerHTML =
     '<b>Source.</b> ' + esc(M.srcName) + ' · ' + num(M.rows) + ' rows · ' + num(M.campaigns) + ' campaigns · ' + lblFull(M.dateMin) + ' to ' + lblFull(M.dateMax) + '. All rows in the tab are read, whatever filter view is applied in Google Sheets.<br>' +
-    '<b>Columns used.</b> Day, Campaign Name, Channel, Objective, Campaign Type, Impressions, Clicks, Amount Spent (= Cost), Installs, E-Sign, Account Open. Week, Month and New Campaign Name are not used (week/month come from the Day).<br>' +
-    '<b>Formulas.</b> ' + formulas + '. Every ratio is recalculated from the summed raw fields for the selected range (never an average of daily ratios). A zero denominator shows “—”. Ratios are shown as ' + (RATIO_DISPLAY === 'percent' ? 'percentages.' : 'plain decimals (not ×100).') + '<br>' +
-    '<b>Sheet totals (all rows).</b> Cost ' + money(T.Spend) + ' · Impressions ' + num(T.Impressions) + ' · Clicks ' + num(T.Clicks) + ' · Installs ' + num(T.Installs) + ' · E-Sign ' + num(T.ESign) + ' · Account Open ' + num(T.AO) + '.<br>' +
+    '<b>Columns used.</b> Day, Campaign Name, Channel, Impressions, Clicks, Amount Spent (= Cost), Installs, Leads, Account Open, Traded AO. Other columns are not used.<br>' +
+    '<b>Direct channel.</b> Direct = people who saw the ads but came to the platform directly. It has no spend of its own, and its Leads, Account Opens and Traded AOs are included in “All channels” totals and blended CACs (total cost ÷ total conversions). Pick a single channel to see Google or Meta on their own.<br>' +
+    '<b>Formulas.</b> ' + formulas + '. Every ratio is recalculated from the summed raw fields for the selected range (never an average of daily ratios). A zero denominator shows “—”. Changes in % metrics are shown in percentage points (pp).<br>' +
+    '<b>Comparison.</b> Off by default. When on, the comparison period is either the previous period of the same length or a custom range. Blue = selected period, orange = comparison period. Trend lines and daily bars line the two periods up day 1 vs day 1. The month-to-date chart always compares with the same days of the previous month.<br>' +
+    '<b>Sheet totals (all rows).</b> Cost ' + money(T.Spend) + ' · Impressions ' + num(T.Impressions) + ' · Clicks ' + num(T.Clicks) + ' · Installs ' + num(T.Installs) + ' · Leads ' + num(T.Leads) + ' · Account Open ' + num(T.AO) + ' · Traded AO ' + num(T.Traded) + '.<br>' +
     '<b>Cost by channel.</b> ' + ch + '.<br>' +
+    '<b>Rows by month (for reconciliation with the sheet).</b><div class="tw" style="max-height:none;margin:4px 0 8px"><table style="width:auto"><thead><tr><th>Month</th><th>Days</th><th>Rows</th><th>Cost</th><th>Installs</th><th>Leads</th><th>Account Open</th><th>Traded AO</th></tr></thead><tbody>' +
+      Object.keys(M.byMonth).sort().map(k => { const b = M.byMonth[k]; return '<tr><td>' + MON[+k.slice(5) - 1] + ' ' + k.slice(0, 4) + '</td><td>' + b.days.size + '</td><td>' + num(b.rows) + '</td><td>' + money(b.Spend) + '</td><td>' + num(b.Installs) + '</td><td>' + num(b.Leads) + '</td><td>' + num(b.AO) + '</td><td>' + num(b.Traded) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
     '<b>Data-quality flags (nothing was corrected silently):</b>' + (issues.length ? '<ul><li>' + issues.join('</li><li>') + '</li></ul>' : ' none found.<br>');
+}
+function renderWarn() {
+  const M = META, w = [];
+  if (M.skippedDate) w.push('<b>' + num(M.skippedDate) + ' row(s) are missing from the dashboard</b> because their Day value could not be read as a date (e.g. ' + M.skippedSamples.map(x => '“' + esc(x) + '”').join(', ') + '). Fix those cells in the sheet, then click Refresh data.');
+  if (M.dateOrder.dmy && M.dateOrder.mdy) w.push('<b>Mixed date formats</b> in the Day column (some DD/MM, some MM/DD). Dates were read as ' + (M.dateOrder.order === 'DMY' ? 'DD/MM/YYYY' : 'MM/DD/YYYY') + '; some days may be wrong until the column is made consistent.');
+  if (M.nonNumericTotal) w.push('<b>' + num(M.nonNumericTotal) + ' cell(s) in number columns are not numbers</b> (' + Object.keys(M.nonNumericCells).map(k => esc(k) + ': ' + M.nonNumeric[k] + ', e.g. “' + esc(M.nonNumericCells[k]) + '”').join('; ') + ') and were counted as 0. Fix them in the sheet, then click Refresh data.');
+  const el = $('dqwarn'); el.innerHTML = w.join('<br>'); el.classList.toggle('hide', !w.length);
 }
 
 function render() {
   if (!CD.length) return;
-  const cur = currentRange(), cmp = compareRange(cur), f = F();
-  const rows = pick(cur, f), a = agg(rows), p = agg(pick(cmp, f));
-  renderCtx(cur, cmp); renderCards(a, p); renderFunnel(a); renderTrends(f, cur); renderDist(cur, f); renderGauge(f, cur); renderTable(rows, f);
+  const cur = currentRange(), cmp = cmpOn() ? compareRange(cur) : null, f = F();
+  const a = agg(pick(cur, f)), p = cmp ? agg(pick(cmp, f)) : null;
+  renderCtx(cur, cmp); renderCards(a, p); renderFunnel(a, p); renderTrends(f, cur, cmp); renderDist(cur, cmp, f); renderGauge(f, cur); renderTable(cur, cmp, f);
 }
 
 /* ---------- install data (first load or refresh) — keeps the user's filters where still valid ---------- */
 function installModel(model, srcName, keep) {
-  const prev = keep ? Object.assign(F(), { period: $('period').value, compare: $('compare').value }) : null;
+  const prevCh = keep ? $('channel').value : 'All';
   CD = model.rows; META = model.meta; MIND = META.dateMin; MAXD = META.dateMax;
-  const uniq = k => [...new Set(CD.map(r => r[k]))].sort((a, b) => a === UNMAPPED ? 1 : b === UNMAPPED ? -1 : a.localeCompare(b));
-  fillSelect('channel', uniq('Channel'), 'All channels');
-  fillSelect('obj', uniq('Objective'), 'All objectives');
-  fillSelect('type', uniq('Type'), 'All types');
-  fillSelect('camp', uniq('Campaign'), 'All campaigns');
+  const chans = [...new Set(CD.map(r => r.Channel))].sort((a, b) => a === UNMAPPED ? 1 : b === UNMAPPED ? -1 : a.localeCompare(b));
+  fillSelect('channel', chans, 'All channels');
+  $('channel').value = chans.includes(prevCh) ? prevCh : 'All';
   ['fromA', 'toA', 'fromB', 'toB'].forEach(id => { $(id).min = MIND; $(id).max = MAXD; });
-  $('subline').textContent = 'Google & Meta · data through ' + lblFull(MAXD) + ' · ' + META.campaigns + ' campaigns · ' + srcName;
-  if (prev) {
-    ['channel', 'obj', 'type', 'camp'].forEach(k => { $(k).value = [...$(k).options].some(o => o.value === prev[k]) ? prev[k] : 'All'; });
-    $('period').value = prev.period; $('compare').value = prev.compare;
-  } else {
+  $('subline').textContent = chans.filter(c => c !== UNMAPPED).join(' · ') + ' · data through ' + lblFull(MAXD) + ' · ' + META.campaigns + ' campaigns · ' + srcName;
+  if (!keep) {
     $('fromA').value = $('toA').value = MAXD; $('fromB').value = $('toB').value = addDays(MAXD, -1);
-    $('period').value = DEFAULT_PERIOD; $('compare').value = 'auto';
-    state.focus = null; state.sortKey = 'Spend'; state.sortDir = -1; $('distMetric').value = 'Spend'; $('viewBy').value = 'campaign';
+    $('period').value = DEFAULT_PERIOD; $('cmpOn').checked = false; $('cmpMode').value = 'prev';
+    state.camps.clear(); state.focus = null; state.sortKey = 'Spend'; state.sortDir = -1; $('distMetric').value = 'Spend'; $('viewBy').value = 'campaign';
   }
-  syncRangeInputs(); renderNotes(); render();
+  pruneCamps(); renderCampList(); syncRangeInputs(); renderNotes(); renderWarn(); render();
 }
 
 function showMsg(kind, html) {
@@ -698,21 +914,35 @@ async function loadSharedData() {
 
 /* ---------- init ---------- */
 (function init() {
-  METRICS.forEach(m => ['tm7', 'tmM', 'distMetric'].forEach(id => { const o = document.createElement('option'); o.value = m[1]; o.textContent = m[0]; $(id).appendChild(o); }));
-  $('tm7').value = 'Spend'; $('tmM').value = 'AO';
+  METRICS.forEach(m => ['tmT', 'tmM', 'distMetric'].forEach(id => { const o = document.createElement('option'); o.value = m[1]; o.textContent = m[0]; $(id).appendChild(o); }));
+  $('tmT').value = 'Spend'; $('tmM').value = 'AO';
   try {
     const u = localStorage.getItem('vt_under_v1'), o = localStorage.getItem('vt_over_v1'), pr = localStorage.getItem('vt_prorate_v1');
     if (u !== null) $('limUnder').value = u; if (o !== null) $('limOver').value = o; if (pr !== null) $('prorate').checked = pr === '1';
   } catch (e) {}
-  ['period', 'compare'].forEach(id => $(id).onchange = () => { syncRangeInputs(); render(); });
-  ['channel', 'obj', 'type', 'camp', 'fromA', 'toA', 'fromB', 'toB'].forEach(id => $(id).onchange = render);
-  $('tm7').onchange = $('tmM').onchange = () => { if (CD.length) renderTrends(F(), currentRange()); };
+  ['period', 'cmpMode'].forEach(id => $(id).onchange = () => { syncRangeInputs(); render(); });
+  $('cmpOn').onchange = () => { syncRangeInputs(); render(); };
+  ['fromA', 'toA', 'fromB', 'toB'].forEach(id => $(id).onchange = render);
+  $('channel').onchange = () => { pruneCamps(); renderCampList(); render(); };
+  $('campBtn').onclick = e => { e.stopPropagation(); $('campPanel').classList.toggle('hide'); if (!$('campPanel').classList.contains('hide')) $('campSearch').focus(); };
+  $('campPanel').onclick = e => e.stopPropagation();
+  document.addEventListener('click', () => $('campPanel').classList.add('hide'));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') $('campPanel').classList.add('hide'); });
+  $('campSearch').oninput = renderCampList;
+  $('campAll').onclick = () => {
+    const q = $('campSearch').value.trim().toLowerCase();
+    campUniverse().filter(x => !q || x.name.toLowerCase().includes(q)).forEach(x => state.camps.add(x.name));
+    renderCampList(); render();
+  };
+  $('campClear').onclick = () => { state.camps.clear(); renderCampList(); render(); };
+  $('tmT').onchange = $('tmM').onchange = () => { if (CD.length) { const cur = currentRange(); renderTrends(F(), cur, cmpOn() ? compareRange(cur) : null); } };
   $('viewBy').onchange = $('distMetric').onchange = () => { state.focus = null; render(); };
   $('fscale').onchange = () => { state.funnelScale = $('fscale').value; render(); };
   const onLim = () => { try { localStorage.setItem('vt_under_v1', $('limUnder').value); localStorage.setItem('vt_over_v1', $('limOver').value); localStorage.setItem('vt_prorate_v1', $('prorate').checked ? '1' : '0'); } catch (e) {} if (CD.length) renderGauge(F(), currentRange()); };
   $('limUnder').oninput = $('limOver').oninput = $('prorate').onchange = onLim;
   $('reset').onclick = resetAll;
   $('btnRefresh').onclick = loadSharedData;
+  syncRangeInputs();
   // No campaign data is embedded in this HTML; it is loaded from the Apps Script web app.
   loadSharedData();
 })();
