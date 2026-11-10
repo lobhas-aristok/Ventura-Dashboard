@@ -56,7 +56,12 @@ body{font-family:"Segoe UI",Inter,Arial,sans-serif;background:var(--page);color:
 .ctx .cb{color:var(--cur)}.ctx .co{color:var(--cmp-ink)}
 .chip{background:#e8f3ff;color:#1559a8;border-radius:14px;padding:3px 9px;font-weight:600;cursor:pointer;font-size:11.5px}
 .chip:hover{background:#d5e9ff}
-.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.kpis{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.kpis.k15{grid-template-columns:repeat(5,minmax(0,1fr))}
+.kpi .d small{font-size:9px;margin-left:1px}
+.fcac{margin-top:6px;padding:9px 8px;border-radius:8px;background:#f3f8ff;display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:12.5px;cursor:pointer;border:2px solid transparent}
+.fcac.active{border-color:var(--cur)}
+.fcac .fvc{color:var(--cmp-ink);font-size:11.5px;font-weight:600}
 .kpi{padding:12px 10px;text-align:center}
 .kpi .l{font-size:12px;font-weight:700;color:#344054}
 .kpi .v{font-size:22px;font-weight:600;margin-top:4px;letter-spacing:-.01em;overflow-wrap:anywhere}
@@ -117,9 +122,9 @@ details{margin-top:12px;padding:12px 14px}
 details summary{cursor:pointer;font-weight:700;font-size:12px;color:#344054}
 details .body{margin-top:8px;font-size:12px;line-height:1.65;color:#344054}
 details .body ul{margin:4px 0 8px 18px;padding:0}
-@media(max-width:1300px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:1300px){.kpis,.kpis.k15{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:1100px){#pFunnel,#pTrend,#pMtd,#pDist,#pGauge{grid-column:1/-1;grid-row:auto}}
-@media(max-width:600px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.top h1{font-size:20px}}
+@media(max-width:600px){.kpis,.kpis.k15{grid-template-columns:repeat(2,minmax(0,1fr))}.top h1{font-size:20px}}
 </style>
 </head>
 <body>
@@ -144,7 +149,15 @@ details .body ul{margin:4px 0 8px 18px;padding:0}
   </label>
   <label class="rngA hide">From<input type="date" id="fromA"></label>
   <label class="rngA hide">To<input type="date" id="toA"></label>
-  <label>Channel<select id="channel"></select></label>
+  <div class="msel" id="chanBox">
+    <span class="lab">Channels</span>
+    <button type="button" class="mselbtn" id="chanBtn" style="width:200px"><span id="chanBtnTxt">All channels</span><b>▾</b></button>
+    <div class="mpanel hide" id="chanPanel" style="width:260px">
+      <input type="search" id="chanSearch" placeholder="Search channels…">
+      <div class="mact"><button type="button" class="btn" id="chanAll">Select all shown</button><button type="button" class="btn" id="chanClear">Clear (show all)</button><span class="cnt" id="chanCnt"></span></div>
+      <div class="mlist" id="chanList"></div>
+    </div>
+  </div>
   <div class="msel" id="campBox">
     <span class="lab">Campaigns</span>
     <button type="button" class="mselbtn" id="campBtn"><span id="campBtnTxt">All campaigns</span><b>▾</b></button>
@@ -177,7 +190,7 @@ details .body ul{margin:4px 0 8px 18px;padding:0}
     </div>
     <div class="legend cmpLegend hide"><span><i style="background:var(--cur)"></i>Selected period</span><span><i style="background:var(--cmp)"></i>Comparison period</span></div>
     <div id="funnel"></div>
-    <div class="note" style="margin-top:8px">Click a stage to rank the distribution chart and table by that metric. Installs, Leads, Account Opens and Traded AOs are counted on the day they happen, so stages are not a strict single-user path.</div>
+    <div class="note" style="margin-top:8px">Click a stage to rank the distribution chart and table by that metric. Installs, E-KYCs and E-Signs are counted on the day they happen, so stages are not a strict single-user path.</div>
   </div>
 
   <div class="card panel" id="pTrend">
@@ -256,7 +269,7 @@ const RATIO_DECIMALS = 2;
 /* Exact header names in row 1 of the sheet tab. */
 const COL = {
   day: 'Day', campaign: 'Campaign Name', channel: 'Channel',
-  impressions: 'Impressions', clicks: 'Clicks', spend: 'Amount Spent', installs: 'Installs', leads: 'Leads', ao: 'Account Open', traded: 'Traded AO'
+  impressions: 'Impressions', clicks: 'Clicks', spend: 'Amount Spent', installs: 'Installs', ekyc: 'E-KYC', esign: 'E-Sign'
 };
 /* ===================================================================================== */
 
@@ -355,7 +368,7 @@ function ingest(table, srcName){
     if (!day) {
       const raw = g(r, COL.day);
       const empty = raw == null || String(raw).trim() === '';
-      const hasNumbers = [COL.impressions, COL.clicks, COL.spend, COL.installs, COL.leads, COL.ao, COL.traded].some(c => { const x = g(r, c); return x !== '' && x != null && Number(String(x).replace(/[,₹\s]/g, '')) !== 0; });
+      const hasNumbers = [COL.impressions, COL.clicks, COL.spend, COL.installs, COL.ekyc, COL.esign].some(c => { const x = g(r, c); return x !== '' && x != null && Number(String(x).replace(/[,₹\s]/g, '')) !== 0; });
       if (empty && !hasNumbers) { M.skippedBlank++; continue; }       // genuinely empty row
       M.skippedDate++;
       if (M.skippedSamples.length < 6) M.skippedSamples.push(String(raw));
@@ -367,12 +380,12 @@ function ingest(table, srcName){
       Day: day, Campaign: name || BLANKNAME,
       Channel: ch && ch !== '#ERR' ? ch : UNMAPPED,
       Impressions: numOf(g(r, COL.impressions), COL.impressions), Clicks: numOf(g(r, COL.clicks), COL.clicks), Spend: numOf(g(r, COL.spend), COL.spend),
-      Installs: numOf(g(r, COL.installs), COL.installs), Leads: numOf(g(r, COL.leads), COL.leads), AO: numOf(g(r, COL.ao), COL.ao), Traded: numOf(g(r, COL.traded), COL.traded)
+      Installs: numOf(g(r, COL.installs), COL.installs), EKYC: numOf(g(r, COL.ekyc), COL.ekyc), ESign: numOf(g(r, COL.esign), COL.esign)
     };
     if (!name) M.blankName++;
     if (rec.Channel === UNMAPPED) { M.unmappedRows++; if (name) M.unmappedCampaigns.add(name); }
     if (ch === '#ERR') M.errRows++;
-    if (rec.Channel !== DIRECT && rec.Spend === 0 && (rec.Installs + rec.Leads + rec.AO + rec.Traded) > 0) { M.zeroSpendConv++; M.zeroSpendConvByCh[rec.Channel] = (M.zeroSpendConvByCh[rec.Channel] || 0) + 1; }
+    if (rec.Channel !== DIRECT && rec.Spend === 0 && (rec.Installs + rec.EKYC + rec.ESign) > 0) { M.zeroSpendConv++; M.zeroSpendConvByCh[rec.Channel] = (M.zeroSpendConvByCh[rec.Channel] || 0) + 1; }
     const k = day + '|' + rec.Channel + '|' + rec.Campaign; if (seen[k]) dupKeys.add(k); seen[k] = 1;
     rows.push(rec);
   }
@@ -384,7 +397,7 @@ function ingest(table, srcName){
   M.totals = agg(rows);
   const byCh = {}; rows.forEach(r => byCh[r.Channel] = (byCh[r.Channel] || 0) + r.Spend);
   M.byChannel = byCh; M.unmappedCampaigns = [...M.unmappedCampaigns].sort();
-  const byMonth = {}; rows.forEach(r => { const k = r.Day.slice(0, 7); (byMonth[k] = byMonth[k] || { rows: 0, Spend: 0, Installs: 0, Leads: 0, AO: 0, Traded: 0, days: new Set() }); const b = byMonth[k]; b.rows++; b.Spend += r.Spend; b.Installs += r.Installs; b.Leads += r.Leads; b.AO += r.AO; b.Traded += r.Traded; b.days.add(r.Day); });
+  const byMonth = {}; rows.forEach(r => { const k = r.Day.slice(0, 7); (byMonth[k] = byMonth[k] || { rows: 0, Spend: 0, Installs: 0, EKYC: 0, ESign: 0, days: new Set() }); const b = byMonth[k]; b.rows++; b.Spend += r.Spend; b.Installs += r.Installs; b.EKYC += r.EKYC; b.ESign += r.ESign; b.days.add(r.Day); });
   M.byMonth = byMonth;
   return { rows, meta: M };
 }
@@ -410,31 +423,30 @@ function compareRange(cur) { return $('cmpMode').value === 'custom' ? pickRange(
 const inR = (d, r) => d >= r[0] && d <= r[1];
 
 /* ---------- selection + formulas (ratios recomputed from summed raw fields) ---------- */
-const state = { camps: new Set(), focus: null, sortKey: 'Spend', sortDir: -1, funnelScale: 'true' };
+const state = { chans: new Set(), camps: new Set(), focus: null, sortKey: 'Spend', sortDir: -1, funnelScale: 'true' };
 const cmpOn = () => $('cmpOn').checked;
-function F() { return { channel: $('channel').value, camps: state.camps }; }
+function F() { return { chans: state.chans, camps: state.camps }; }
 /* opts.ignoreChannel / opts.ignoreCamps let a chart show every item of its own dimension */
 function pick(range, f, opts) {
   opts = opts || {};
   return CD.filter(r => inR(r.Day, range) &&
-    (opts.ignoreChannel || f.channel === 'All' || r.Channel === f.channel) &&
+    (opts.ignoreChannel || !f.chans.size || f.chans.has(r.Channel)) &&
     (opts.ignoreCamps || !f.camps.size || f.camps.has(r.Campaign)));
 }
-const BASE = ['Spend','Impressions','Clicks','Installs','Leads','AO','Traded'];
+const BASE = ['Spend','Impressions','Clicks','Installs','EKYC','ESign'];
 const div = (a, b) => b ? a / b : null;   // null shows as "—" (no divide-by-zero)
 function agg(rows) {
   const o = {}; BASE.forEach(k => o[k] = 0);
   rows.forEach(r => BASE.forEach(k => o[k] += Number(r[k] || 0)));
-  o.CTR      = div(o.Clicks,   o.Impressions);  // Clicks / Impressions
-  o.CPC      = div(o.Spend,    o.Clicks);       // Cost / Clicks
-  o.CPI      = div(o.Spend,    o.Installs);     // Cost / Installs
-  o.C2I      = div(o.Installs, o.Clicks);       // Installs / Clicks
-  o.Lead_CAC = div(o.Spend,    o.Leads);        // Cost / Leads
-  o.I2AO     = div(o.AO,       o.Installs);     // Account Open / Installs
-  o.L2AO     = div(o.AO,       o.Leads);        // Account Open / Leads
-  o.AO_CAC   = div(o.Spend,    o.AO);           // Cost / Account Open
-  o.AO2T     = div(o.Traded,   o.AO);           // Traded AO / Account Open
-  o.T_CAC    = div(o.Spend,    o.Traded);       // Cost / Traded AO
+  o.CTR    = div(o.Clicks,   o.Impressions);   // Clicks / Impressions
+  o.CPC    = div(o.Spend,    o.Clicks);        // Cost / Clicks
+  o.CPM    = o.Impressions ? o.Spend / o.Impressions * 1000 : null;   // Cost / Impressions × 1000
+  o.CPI    = div(o.Spend,    o.Installs);      // Cost / Installs
+  o.C2I    = div(o.Installs, o.Clicks);        // Installs / Clicks
+  o.I2K    = div(o.EKYC,     o.Installs);      // E-KYC / Installs
+  o.K_CAC  = div(o.Spend,    o.EKYC);          // Cost / E-KYC
+  o.K2S    = div(o.ESign,    o.EKYC);          // E-Sign / E-KYC
+  o.S_CAC  = div(o.Spend,    o.ESign);         // Cost / E-Sign
   return o;
 }
 function groupBy(rows, key) { const g = {}; rows.forEach(r => (g[r[key]] = g[r[key]] || []).push(r)); return g; }
@@ -454,41 +466,48 @@ function compact(v) {
   return (Math.round(v * 100) / 100).toString();
 }
 const FMT = { money, unit, num, rate };
+/* % change = current ÷ previous − 1, for every metric (green/red respects whether lower is better) */
 function delta(a, b, lower) {
-  if (bad(a) || bad(b) || b === 0) return '';
-  const d = (a - b) / b, good = lower ? d < 0 : d > 0;
-  if (Math.abs(d) < 1e-12) return '<span>0.0%</span>';
-  return '<span class="' + (good ? 'up' : 'down') + '">' + (d >= 0 ? '↑ ' : '↓ ') + (Math.abs(d) * 100).toFixed(1) + '%</span>';
-}
-function deltaPP(a, b) {
-  if (bad(a) || bad(b)) return '';
-  const d = a - b, txt = RATIO_DISPLAY === 'percent' ? Math.abs(d * 100).toFixed(2) + ' pp' : Math.abs(d).toFixed(RATIO_DECIMALS);
-  if (Math.abs(d) < 1e-12) return '<span>0.00 pp</span>';
-  return '<span class="' + (d > 0 ? 'up' : 'down') + '">' + (d > 0 ? '↑ ' : '↓ ') + txt + '</span>';
+  if (bad(a) || bad(b) || b === 0) return '<span style="color:var(--muted)">—</span>';
+  const d = a / b - 1;
+  if (Math.abs(d) < 1e-12) return '<span>0.0<small>%</small></span>';
+  const good = lower ? d < 0 : d > 0;
+  return '<span class="' + (good ? 'up' : 'down') + '">' + (d > 0 ? '↑ ' : '↓ ') + (Math.abs(d) * 100).toFixed(1) + '<small>%</small></span>';
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* ---------- metric catalogue: [label, key, format, lowerIsBetter, formula] ---------- */
-const METRICS = [
+const ALL_METRICS = [
   ['Cost', 'Spend', 'money', false, 'Amount Spent'],
   ['Impressions', 'Impressions', 'num', false, ''],
   ['Clicks', 'Clicks', 'num', false, ''],
   ['CTR', 'CTR', 'rate', false, 'Clicks ÷ Impressions'],
   ['CPC', 'CPC', 'unit', true, 'Cost ÷ Clicks'],
+  ['CPM', 'CPM', 'unit', true, 'Cost ÷ Impressions × 1,000', 'metaOnly'],
   ['Installs', 'Installs', 'num', false, ''],
-  ['Cost / Install', 'CPI', 'unit', true, 'Cost ÷ Installs'],
+  ['CPI', 'CPI', 'unit', true, 'Cost ÷ Installs'],
   ['Click to Install', 'C2I', 'rate', false, 'Installs ÷ Clicks'],
-  ['Leads', 'Leads', 'num', false, ''],
-  ['Lead CAC', 'Lead_CAC', 'unit', true, 'Cost ÷ Leads'],
-  ['Account Open', 'AO', 'num', false, ''],
-  ['Install to AO %', 'I2AO', 'rate', false, 'Account Open ÷ Installs'],
-  ['Lead to Account Open', 'L2AO', 'rate', false, 'Account Open ÷ Leads'],
-  ['Account Open CAC', 'AO_CAC', 'unit', true, 'Cost ÷ Account Open'],
-  ['Traded AO', 'Traded', 'num', false, ''],
-  ['AO to Traded %', 'AO2T', 'rate', false, 'Traded AO ÷ Account Open'],
-  ['Traded AO CAC', 'T_CAC', 'unit', true, 'Cost ÷ Traded AO']
+  ['E-KYC', 'EKYC', 'num', false, ''],
+  ['Installs to E-KYC %', 'I2K', 'rate', false, 'E-KYC ÷ Installs'],
+  ['Cost per E-KYC', 'K_CAC', 'unit', true, 'Cost ÷ E-KYC'],
+  ['E-Sign', 'ESign', 'num', false, ''],
+  ['E-KYC to E-Sign %', 'K2S', 'rate', false, 'E-Sign ÷ E-KYC'],
+  ['E-Sign CAC', 'S_CAC', 'unit', true, 'Cost ÷ E-Sign']
 ];
-const mDef = key => METRICS.find(m => m[1] === key) || METRICS[0];
+/* CPM only when Meta is the only channel ticked */
+const metaOnly = () => state.chans.size === 1 && state.chans.has('Meta');
+let METRICS = ALL_METRICS.filter(m => m[5] !== 'metaOnly');
+function refreshMetrics() {
+  METRICS = ALL_METRICS.filter(m => m[5] !== 'metaOnly' || metaOnly());
+  ['tmT', 'tmM', 'distMetric'].forEach(id => {
+    const sel = $(id), cur = sel.value; sel.innerHTML = '';
+    METRICS.forEach(m => { const o = document.createElement('option'); o.value = m[1]; o.textContent = m[0]; sel.appendChild(o); });
+    sel.value = METRICS.some(m => m[1] === cur) ? cur : (id === 'tmM' ? 'ESign' : 'Spend');
+  });
+  if (!METRICS.some(m => m[1] === state.sortKey) && state.sortKey !== 'Campaign' && state.sortKey !== 'Channel') state.sortKey = 'Spend';
+  if (state.focus && !METRICS.some(m => m[1] === state.focus)) state.focus = null;
+}
+const mDef = key => ALL_METRICS.find(m => m[1] === key) || ALL_METRICS[0];
 const labelFor = (def, v) => bad(v) ? '' : def[2] === 'money' ? '₹' + compact(v) : def[2] === 'unit' ? (v >= 1000 ? '₹' + compact(v) : '₹' + v.toFixed(0)) : def[2] === 'rate' ? rate(v) : compact(v);
 const tickFor = def => v => def[2] === 'rate' ? (RATIO_DISPLAY === 'percent' ? +(v * 100).toFixed(2) + '%' : +v.toFixed(4)) : (def[2] === 'money' || def[2] === 'unit' ? '₹' : '') + compact(v);
 const COLORS = { cur: '#1a8cff', curDim: '#c9e2ff', cmp: '#f28c28', cmpDim: '#fbd9b8', curInk: '#0f5fb8', cmpInk: '#b45f0e' };
@@ -537,39 +556,43 @@ Chart.register({
 const hoverPointer = (e, els) => { if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; };
 function daysOf(r) { const out = []; for (let d = r[0]; d <= r[1]; d = addDays(d, 1)) out.push(d); return out; }
 
-/* ---------- campaign multi-select ---------- */
+/* ---------- channel + campaign multi-selects (none ticked = all) ---------- */
+function chanUniverse() { return [...new Set(CD.map(r => r.Channel))].sort((a, b) => a === UNMAPPED ? 1 : b === UNMAPPED ? -1 : a.localeCompare(b)); }
 function campUniverse() {
-  const ch = $('channel').value, m = {};
-  CD.forEach(r => { if (ch === 'All' || r.Channel === ch) { (m[r.Campaign] = m[r.Campaign] || new Set()).add(r.Channel); } });
+  const m = {};
+  CD.forEach(r => { if (!state.chans.size || state.chans.has(r.Channel)) { (m[r.Campaign] = m[r.Campaign] || new Set()).add(r.Channel); } });
   return Object.keys(m).sort((a, b) => a.localeCompare(b)).map(k => ({ name: k, ch: [...m[k]].join(', ') }));
 }
 function pruneCamps() { const u = new Set(campUniverse().map(x => x.name)); [...state.camps].forEach(c => { if (!u.has(c)) state.camps.delete(c); }); }
-function updateCampBtn() {
-  const n = state.camps.size;
-  $('campBtnTxt').textContent = n === 0 ? 'All campaigns' : n === 1 ? [...state.camps][0] : n + ' campaigns selected';
-  $('campBtn').title = n ? [...state.camps].join('\n') : 'All campaigns';
+function btnText(set, allTxt, noun) { const n = set.size; return n === 0 ? allTxt : n === 1 ? [...set][0] : n + ' ' + noun + ' selected'; }
+function renderChanList() {
+  const q = $('chanSearch').value.trim().toLowerCase();
+  const list = chanUniverse().filter(c => !q || c.toLowerCase().includes(q));
+  $('chanList').innerHTML = list.length ? list.map(c => '<label><input type="checkbox" value="' + esc(c) + '"' + (state.chans.has(c) ? ' checked' : '') + '><span>' + esc(c) + '</span></label>').join('') : '<div class="note" style="padding:6px">No channels match.</div>';
+  $('chanList').querySelectorAll('input').forEach(cb => cb.onchange = () => { if (cb.checked) state.chans.add(cb.value); else state.chans.delete(cb.value); afterChanChange(false); });
+  $('chanCnt').textContent = state.chans.size ? state.chans.size + ' selected' : 'none selected = all';
+  $('chanBtnTxt').textContent = btnText(state.chans, 'All channels', 'channels');
+  $('chanBtn').title = state.chans.size ? [...state.chans].join('\n') : 'All channels';
 }
 function renderCampList() {
   const q = $('campSearch').value.trim().toLowerCase();
   const list = campUniverse().filter(x => !q || x.name.toLowerCase().includes(q));
   $('campList').innerHTML = list.length ? list.map(x => '<label><input type="checkbox" value="' + esc(x.name) + '"' + (state.camps.has(x.name) ? ' checked' : '') + '><span>' + esc(x.name) + '</span><span class="ch">' + esc(x.ch) + '</span></label>').join('') : '<div class="note" style="padding:6px">No campaigns match.</div>';
-  $('campCnt').textContent = state.camps.size ? state.camps.size + ' selected' : 'none selected = all';
   $('campList').querySelectorAll('input').forEach(cb => cb.onchange = () => {
     if (cb.checked) state.camps.add(cb.value); else state.camps.delete(cb.value);
     $('campCnt').textContent = state.camps.size ? state.camps.size + ' selected' : 'none selected = all';
-    updateCampBtn(); render();
+    $('campBtnTxt').textContent = btnText(state.camps, 'All campaigns', 'campaigns');
+    render();
   });
-  updateCampBtn();
+  $('campCnt').textContent = state.camps.size ? state.camps.size + ' selected' : 'none selected = all';
+  $('campBtnTxt').textContent = btnText(state.camps, 'All campaigns', 'campaigns');
+  $('campBtn').title = state.camps.size ? [...state.camps].join('\n') : 'All campaigns';
 }
+function afterChanChange(rebuildList) { pruneCamps(); refreshMetrics(); if (rebuildList !== false) renderChanList(); else { $('chanCnt').textContent = state.chans.size ? state.chans.size + ' selected' : 'none selected = all'; $('chanBtnTxt').textContent = btnText(state.chans, 'All channels', 'channels'); } renderCampList(); render(); }
 function toggleCamp(c) { if (state.camps.has(c)) state.camps.delete(c); else state.camps.add(c); renderCampList(); render(); }
+function toggleChan(c) { if (state.chans.has(c)) state.chans.delete(c); else state.chans.add(c); afterChanChange(true); }
 
 /* ---------- filter helpers ---------- */
-function fillSelect(id, items, allLabel) {
-  const s = $(id); s.innerHTML = '';
-  const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; s.appendChild(o); };
-  if (allLabel) add('All', allLabel);
-  items.forEach(x => add(x, x));
-}
 function setSingleDay(d) {
   if ($('period').value === 'custom' && $('fromA').value === d && $('toA').value === d) $('period').value = DEFAULT_PERIOD;
   else { $('period').value = 'custom'; $('fromA').value = d; $('toA').value = d; }
@@ -585,37 +608,37 @@ function syncRangeInputs() {
   $('cmpState').style.color = on ? 'var(--cmp-ink)' : 'var(--muted)';
 }
 function resetAll() {
-  $('period').value = DEFAULT_PERIOD; $('channel').value = 'All'; state.camps.clear(); $('campSearch').value = '';
+  $('period').value = DEFAULT_PERIOD; state.chans.clear(); state.camps.clear(); $('campSearch').value = ''; $('chanSearch').value = '';
   $('cmpOn').checked = false; $('cmpMode').value = 'prev';
-  state.focus = null; state.sortKey = 'Spend'; state.sortDir = -1; $('distMetric').value = 'Spend'; $('viewBy').value = 'campaign';
-  syncRangeInputs(); renderCampList(); render();
+  state.focus = null; state.sortKey = 'Spend'; state.sortDir = -1; refreshMetrics(); $('distMetric').value = 'Spend'; $('viewBy').value = 'campaign';
+  syncRangeInputs(); renderChanList(); renderCampList(); render();
 }
 
 /* ---------- renderers ---------- */
 function renderCtx(cur, cmp) {
   const f = F(), chips = [];
   if ($('period').value !== DEFAULT_PERIOD) chips.push(['period', 'Dates: ' + rangeLbl(cur)]);
-  if (f.channel !== 'All') chips.push(['channel', 'Channel: ' + f.channel]);
+  if (f.chans.size) chips.push(['chans', 'Channels: ' + (f.chans.size === 1 ? [...f.chans][0] : [...f.chans].join(', '))]);
   if (f.camps.size) chips.push(['camps', 'Campaigns: ' + (f.camps.size === 1 ? [...f.camps][0] : f.camps.size + ' selected')]);
   $('ctx').innerHTML = 'Showing <b class="cb">' + rangeLbl(cur) + '</b>' + (cmp ? ' · compared with <b class="co">' + rangeLbl(cmp) + '</b>' : ' · comparison off') +
     (chips.length ? ' · Active filters: ' + chips.map(c => '<span class="chip" data-clear="' + c[0] + '">' + esc(c[1]) + ' ✕</span>').join(' ') : '');
   $('ctx').querySelectorAll('[data-clear]').forEach(c => c.onclick = () => {
     const k = c.dataset.clear;
-    if (k === 'period') { $('period').value = DEFAULT_PERIOD; syncRangeInputs(); }
-    else if (k === 'camps') { state.camps.clear(); renderCampList(); }
-    else { $(k).value = 'All'; pruneCamps(); renderCampList(); }
-    render();
+    if (k === 'period') { $('period').value = DEFAULT_PERIOD; syncRangeInputs(); render(); }
+    else if (k === 'camps') { state.camps.clear(); renderCampList(); render(); }
+    else { state.chans.clear(); afterChanChange(true); }
   });
 }
 function renderCards(a, p) {
+  $('kpis').classList.toggle('k15', METRICS.length === 15);
   $('kpis').innerHTML = METRICS.map(c =>
     '<div class="card kpi" title="' + esc(c[4] || c[0]) + '"><div class="l">' + c[0] + '</div><div class="v">' + FMT[c[2]](a[c[1]]) + '</div>' +
     '<div class="f">' + (c[4] && c[4] !== 'Amount Spent' ? esc(c[4]) : '&nbsp;') + '</div>' +
-    (p ? '<div class="cv">vs ' + FMT[c[2]](p[c[1]]) + '</div><div class="d">' + (c[2] === 'rate' ? deltaPP(a[c[1]], p[c[1]]) : delta(a[c[1]], p[c[1]], c[3])) + '</div>' : '') +
+    (p ? '<div class="cv">vs ' + FMT[c[2]](p[c[1]]) + '</div><div class="d" title="% change = current ÷ previous − 1">' + delta(a[c[1]], p[c[1]], c[3]) + '</div>' : '') +
     '</div>').join('');
 }
 
-const STAGES = [['Impressions', 'Impressions'], ['Clicks', 'Clicks'], ['Installs', 'Installs'], ['Leads', 'Leads'], ['Account Open', 'AO'], ['Traded AO', 'Traded']];
+const STAGES = [['Impressions', 'Impressions'], ['Clicks', 'Clicks'], ['Installs', 'Installs'], ['E-KYC', 'EKYC'], ['E-Sign', 'ESign']];
 function renderFunnel(a, p) {
   const mode = state.funnelScale, ref = Math.max(a.Impressions || 0, p ? (p.Impressions || 0) : 0);
   const width = v => {
@@ -631,11 +654,12 @@ function renderFunnel(a, p) {
       '<div class="ftrack"><div class="fbar" style="width:' + width(v).toFixed(2) + '%"></div></div>' +
       (p ? '<div class="ftrack"><div class="fbar c" style="width:' + width(pv).toFixed(2) + '%"></div></div>' : '') +
       '<div class="fmeta">' + meta + '</div></div>';
-  }).join('');
-  $('funnel').querySelectorAll('.fstage').forEach(el => el.onclick = () => {
+  }).join('') +
+  '<div class="fcac' + (state.focus === 'S_CAC' ? ' active' : '') + '" data-k="S_CAC" title="Cost ÷ E-Sign"><span>E-Sign CAC <span class="note" style="font-weight:500">(Cost ÷ E-Sign)</span></span><span>' + unit(a.S_CAC) + (p ? ' <span class="fvc">vs ' + unit(p.S_CAC) + '</span>' : '') + '</span></div>';
+  $('funnel').querySelectorAll('[data-k]').forEach(el => el.onclick = () => {
     const k = el.dataset.k;
     state.focus = state.focus === k ? null : k;
-    $('distMetric').value = state.focus || 'Spend'; state.sortKey = state.focus || 'Spend'; state.sortDir = -1;
+    $('distMetric').value = state.focus || 'Spend'; state.sortKey = state.focus || 'Spend'; state.sortDir = k === 'S_CAC' && state.focus ? 1 : -1;
     render();
   });
 }
@@ -724,17 +748,17 @@ function renderDist(cur, cmp, f) {
     const items = all.map(k => ({ k, a: agg(cg[k] || [])[mk], b: cmp ? agg(pg[k] || [])[mk] : null }))
       .filter(x => !bad(x.a) || !bad(x.b))
       .sort((x, y) => (bad(y.a) ? -Infinity : y.a) - (bad(x.a) ? -Infinity : x.a) || (bad(y.b) ? -Infinity : y.b) - (bad(x.b) ? -Infinity : x.b));
-    const selFirst = isCamp ? f.camps : (f.channel === 'All' ? new Set() : new Set([f.channel]));
+    const selFirst = isCamp ? f.camps : f.chans;
     if (selFirst.size) items.sort((x, y) => (selFirst.has(y.k) ? 1 : 0) - (selFirst.has(x.k) ? 1 : 0));   // stable: selected items first, each group still by value
     keys = items.map(x => x.k); labels = keys.map(k => k.length > 34 ? k.slice(0, 33) + '…' : k);
     cv = items.map(x => bad(x.a) ? null : x.a); pv = items.map(x => bad(x.b) ? null : x.b);
-    const sel = isCamp ? f.camps : (f.channel === 'All' ? new Set() : new Set([f.channel]));
+    const sel = isCamp ? f.camps : f.chans;
     highlight = i => !sel.size || sel.has(keys[i]);
     onPick = i => {
       if (isCamp) toggleCamp(keys[i]);
-      else { const s = $('channel'); s.value = s.value === keys[i] ? 'All' : keys[i]; pruneCamps(); renderCampList(); render(); }
+      else toggleChan(keys[i]);
     };
-    $('distNote').textContent = (isCamp ? 'All campaigns' : 'All channels') + ' shown (' + keys.length + ')' + (selFirst.size ? ', selected first' : '') + '; scroll to see more. Click a bar to ' + (isCamp ? 'add or remove that campaign from the selection.' : 'filter to that channel. Click again to clear.');
+    $('distNote').textContent = (isCamp ? 'All campaigns' : 'All channels') + ' shown (' + keys.length + ')' + (selFirst.size ? ', selected first' : '') + '; scroll to see more. Click a bar to ' + (isCamp ? 'add or remove that campaign from the selection.' : 'add or remove that channel from the selection.');
     var tipTitle = i => keys[i];
   }
   const n = labels.length, per = cmp ? 34 : 24;
@@ -773,7 +797,7 @@ function renderGauge(f, cur) {
   $('gMonth').textContent = monthName + ' · 1–' + dayN + ' ' + MON[+end.slice(5, 7) - 1];
   const spent = agg(pick([mStart, end], f)).Spend;
   const U = limitVal('limUnder'), O = limitVal('limOver'), pr = $('prorate').checked;
-  const filt = f.channel !== 'All' || f.camps.size > 0;
+  const filt = f.chans.size > 0 || f.camps.size > 0;
   killChart('gauge');
   const box = $('gbox');
   if (U == null || O == null || !(O > U)) {
@@ -801,8 +825,8 @@ function renderGauge(f, cur) {
     ' Monthly limits ' + money(U) + ' – ' + money(O) + (pr ? ', pro-rated to ' + dayN + ' of ' + dim + ' days.' : ' (not pro-rated).');
 }
 
-const COLS = [['Campaign', null, null], ['Channel', null, null]].concat(METRICS.map(m => [m[0], m[1], m[2]]));
 function renderTable(cur, cmp, f) {
+  const COLS = [['Campaign', null, null], ['Channel', null, null]].concat(METRICS.map(m => [m[0], m[1], m[2]]));
   const cg = groupBy(pick(cur, f), 'Campaign'), pg = cmp ? groupBy(pick(cmp, f), 'Campaign') : {};
   const names = [...new Set(Object.keys(cg).concat(Object.keys(pg)))];
   const list = names.map(k => ({ k, ch: [...new Set((cg[k] || []).concat(pg[k] || []).map(r => r.Channel))].join(', '), a: agg(cg[k] || []), b: cmp ? agg(pg[k] || []) : null }));
@@ -835,7 +859,7 @@ function renderTable(cur, cmp, f) {
 function renderNotes() {
   const M = META, T = M.totals, nn = M.nonNumeric;
   const issues = [];
-  if (M.zeroSpendConv) issues.push(M.zeroSpendConv + ' row(s) outside the Direct channel have Installs / Leads / Account Open / Traded AO but ₹0 cost (' + Object.keys(M.zeroSpendConvByCh).map(k => esc(k) + ': ' + M.zeroSpendConvByCh[k]).join(', ') + '). Their conversions are included in totals, which lowers blended Cost / Install and CACs. Filter by channel to check.');
+  if (M.zeroSpendConv) issues.push(M.zeroSpendConv + ' row(s) outside the Direct channel have Installs / E-KYC / E-Sign but ₹0 cost (' + Object.keys(M.zeroSpendConvByCh).map(k => esc(k) + ': ' + M.zeroSpendConvByCh[k]).join(', ') + '). Their conversions are included in totals, which lowers blended CPI and CACs. Filter by channel to check.');
   if (M.blankName) issues.push(M.blankName + ' row(s) have no campaign name; shown as “' + BLANKNAME + '”.');
   if (M.unmappedRows) issues.push(M.unmappedRows + ' row(s) have a blank, “-” or error Channel (' + (M.unmappedCampaigns.length ? 'campaigns: ' + M.unmappedCampaigns.map(esc).join('; ') : 'no named campaign') + '); shown as “' + UNMAPPED + '”.');
   if (M.dupPairs) issues.push(M.dupPairs + ' Day + Channel + Campaign combination(s) appear on more than one row. They are added together, so check they are not double-counted.');
@@ -844,17 +868,17 @@ function renderNotes() {
   if (M.skippedDate) issues.push(M.skippedDate + ' row(s) with numbers were skipped because the Day could not be read as a date (e.g. ' + M.skippedSamples.map(x => '“' + esc(x) + '”').join(', ') + '). They are NOT in any figure.');
   if (M.dateOrder.dmy && M.dateOrder.mdy) issues.push('Text dates appear in both DD/MM and MM/DD order. Read as ' + (M.dateOrder.order === 'DMY' ? 'DD/MM/YYYY' : 'MM/DD/YYYY') + '; please make the Day column consistent.');
   const ch = Object.keys(M.byChannel).sort((a, b) => M.byChannel[b] - M.byChannel[a]).map(k => esc(k) + ' ' + money(M.byChannel[k])).join(' · ');
-  const formulas = METRICS.filter(m => m[2] === 'rate' || m[2] === 'unit').map(m => esc(m[0]) + ' = ' + esc(m[4]) + (m[2] === 'rate' && RATIO_DISPLAY === 'percent' ? ' × 100' : '')).join(' · ');
+  const formulas = ALL_METRICS.filter(m => m[2] === 'rate' || m[2] === 'unit').map(m => esc(m[0]) + ' = ' + esc(m[4]) + (m[2] === 'rate' && RATIO_DISPLAY === 'percent' ? ' × 100' : '') + (m[5] === 'metaOnly' ? ' (shown when only Meta is selected)' : '')).join(' · ');
   $('notesBody').innerHTML =
-    '<b>Source.</b> ' + esc(M.srcName) + ' · ' + num(M.rows) + ' rows · ' + num(M.campaigns) + ' campaigns · ' + lblFull(M.dateMin) + ' to ' + lblFull(M.dateMax) + '. All rows in the tab are read, whatever filter view is applied in Google Sheets.<br>' +
-    '<b>Columns used.</b> Day, Campaign Name, Channel, Impressions, Clicks, Amount Spent (= Cost), Installs, Leads, Account Open, Traded AO. Other columns are not used.<br>' +
-    '<b>Direct channel.</b> Direct = people who saw the ads but came to the platform directly. It has no spend of its own, and its Leads, Account Opens and Traded AOs are included in “All channels” totals and blended CACs (total cost ÷ total conversions). Pick a single channel to see Google or Meta on their own.<br>' +
-    '<b>Formulas.</b> ' + formulas + '. Every ratio is recalculated from the summed raw fields for the selected range (never an average of daily ratios). A zero denominator shows “—”. Changes in % metrics are shown in percentage points (pp).<br>' +
-    '<b>Comparison.</b> Off by default. When on, the comparison period is either the previous period of the same length or a custom range. Blue = selected period, orange = comparison period. Trend lines and daily bars line the two periods up day 1 vs day 1. The month-to-date chart always compares with the same days of the previous month.<br>' +
-    '<b>Sheet totals (all rows).</b> Cost ' + money(T.Spend) + ' · Impressions ' + num(T.Impressions) + ' · Clicks ' + num(T.Clicks) + ' · Installs ' + num(T.Installs) + ' · Leads ' + num(T.Leads) + ' · Account Open ' + num(T.AO) + ' · Traded AO ' + num(T.Traded) + '.<br>' +
+    '<b>Source.</b> ' + esc(M.srcName) + ' · ' + num(M.rows) + ' rows · ' + num(M.campaigns) + ' campaigns · ' + lblFull(M.dateMin) + ' to ' + lblFull(M.dateMax) + '. All rows in the tab are read, whatever filter view is applied in Google Sheets. Dates are read in India time (IST).<br>' +
+    '<b>Columns used.</b> Day, Campaign Name, Channel, Impressions, Clicks, Amount Spent (= Cost), Installs, E-KYC, E-Sign. Other columns are not used.<br>' +
+    '<b>Direct channel.</b> Direct = people who saw the ads but came to the platform directly. It has no spend of its own, and its Installs, E-KYCs and E-Signs are included in “All channels” totals and blended CPI / CACs (total cost ÷ total conversions). Tick only Google or Meta to see them on their own.<br>' +
+    '<b>Formulas.</b> ' + formulas + '. Every ratio is recalculated from the summed raw fields for the selected range (never an average of daily ratios). A zero denominator shows “—”.<br>' +
+    '<b>Comparison.</b> Off by default. When on, the comparison period is either the previous period of the same length or a custom range. Blue = selected period, orange = comparison period. % change = current ÷ previous − 1 for every metric (green = better, so a lower cost metric shows green). Trend lines and daily bars line the two periods up day 1 vs day 1. The month-to-date chart always compares with the same days of the previous month.<br>' +
+    '<b>Sheet totals (all rows).</b> Cost ' + money(T.Spend) + ' · Impressions ' + num(T.Impressions) + ' · Clicks ' + num(T.Clicks) + ' · Installs ' + num(T.Installs) + ' · E-KYC ' + num(T.EKYC) + ' · E-Sign ' + num(T.ESign) + '.<br>' +
     '<b>Cost by channel.</b> ' + ch + '.<br>' +
-    '<b>Rows by month (for reconciliation with the sheet).</b><div class="tw" style="max-height:none;margin:4px 0 8px"><table style="width:auto"><thead><tr><th>Month</th><th>Days</th><th>Rows</th><th>Cost</th><th>Installs</th><th>Leads</th><th>Account Open</th><th>Traded AO</th></tr></thead><tbody>' +
-      Object.keys(M.byMonth).sort().map(k => { const b = M.byMonth[k]; return '<tr><td>' + MON[+k.slice(5) - 1] + ' ' + k.slice(0, 4) + '</td><td>' + b.days.size + '</td><td>' + num(b.rows) + '</td><td>' + money(b.Spend) + '</td><td>' + num(b.Installs) + '</td><td>' + num(b.Leads) + '</td><td>' + num(b.AO) + '</td><td>' + num(b.Traded) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
+    '<b>Rows by month (for reconciliation with the sheet).</b><div class="tw" style="max-height:none;margin:4px 0 8px"><table style="width:auto"><thead><tr><th>Month</th><th>Days</th><th>Rows</th><th>Cost</th><th>Installs</th><th>E-KYC</th><th>E-Sign</th></tr></thead><tbody>' +
+      Object.keys(M.byMonth).sort().map(k => { const b = M.byMonth[k]; return '<tr><td>' + MON[+k.slice(5) - 1] + ' ' + k.slice(0, 4) + '</td><td>' + b.days.size + '</td><td>' + num(b.rows) + '</td><td>' + money(b.Spend) + '</td><td>' + num(b.Installs) + '</td><td>' + num(b.EKYC) + '</td><td>' + num(b.ESign) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
     '<b>Data-quality flags (nothing was corrected silently):</b>' + (issues.length ? '<ul><li>' + issues.join('</li><li>') + '</li></ul>' : ' none found.<br>');
 }
 function renderWarn() {
@@ -874,19 +898,18 @@ function render() {
 
 /* ---------- install data (first load or refresh) — keeps the user's filters where still valid ---------- */
 function installModel(model, srcName, keep) {
-  const prevCh = keep ? $('channel').value : 'All';
   CD = model.rows; META = model.meta; MIND = META.dateMin; MAXD = META.dateMax;
-  const chans = [...new Set(CD.map(r => r.Channel))].sort((a, b) => a === UNMAPPED ? 1 : b === UNMAPPED ? -1 : a.localeCompare(b));
-  fillSelect('channel', chans, 'All channels');
-  $('channel').value = chans.includes(prevCh) ? prevCh : 'All';
+  const chans = chanUniverse();
+  [...state.chans].forEach(c => { if (!chans.includes(c)) state.chans.delete(c); });
   ['fromA', 'toA', 'fromB', 'toB'].forEach(id => { $(id).min = MIND; $(id).max = MAXD; });
   $('subline').textContent = chans.filter(c => c !== UNMAPPED).join(' · ') + ' · data through ' + lblFull(MAXD) + ' · ' + META.campaigns + ' campaigns · ' + srcName;
   if (!keep) {
     $('fromA').value = $('toA').value = MAXD; $('fromB').value = $('toB').value = addDays(MAXD, -1);
     $('period').value = DEFAULT_PERIOD; $('cmpOn').checked = false; $('cmpMode').value = 'prev';
-    state.camps.clear(); state.focus = null; state.sortKey = 'Spend'; state.sortDir = -1; $('distMetric').value = 'Spend'; $('viewBy').value = 'campaign';
+    state.chans.clear(); state.camps.clear(); state.focus = null; state.sortKey = 'Spend'; state.sortDir = -1; $('viewBy').value = 'campaign';
   }
-  pruneCamps(); renderCampList(); syncRangeInputs(); renderNotes(); renderWarn(); render();
+  pruneCamps(); refreshMetrics(); if (!keep) $('distMetric').value = 'Spend';
+  renderChanList(); renderCampList(); syncRangeInputs(); renderNotes(); renderWarn(); render();
 }
 
 function showMsg(kind, html) {
@@ -924,8 +947,7 @@ async function loadSharedData() {
 
 /* ---------- init ---------- */
 (function init() {
-  METRICS.forEach(m => ['tmT', 'tmM', 'distMetric'].forEach(id => { const o = document.createElement('option'); o.value = m[1]; o.textContent = m[0]; $(id).appendChild(o); }));
-  $('tmT').value = 'Spend'; $('tmM').value = 'AO';
+  refreshMetrics(); $('tmT').value = 'Spend'; $('tmM').value = 'ESign';
   try {
     const u = localStorage.getItem('vt_under_v1'), o = localStorage.getItem('vt_over_v1'), pr = localStorage.getItem('vt_prorate_v1');
     if (u !== null) $('limUnder').value = u; if (o !== null) $('limOver').value = o; if (pr !== null) $('prorate').checked = pr === '1';
@@ -933,11 +955,16 @@ async function loadSharedData() {
   ['period', 'cmpMode'].forEach(id => $(id).onchange = () => { syncRangeInputs(); render(); });
   $('cmpOn').onchange = () => { syncRangeInputs(); render(); };
   ['fromA', 'toA', 'fromB', 'toB'].forEach(id => $(id).onchange = render);
-  $('channel').onchange = () => { pruneCamps(); renderCampList(); render(); };
-  $('campBtn').onclick = e => { e.stopPropagation(); $('campPanel').classList.toggle('hide'); if (!$('campPanel').classList.contains('hide')) $('campSearch').focus(); };
-  $('campPanel').onclick = e => e.stopPropagation();
-  document.addEventListener('click', () => $('campPanel').classList.add('hide'));
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') $('campPanel').classList.add('hide'); });
+  const panels = [['chanBtn', 'chanPanel', 'chanSearch'], ['campBtn', 'campPanel', 'campSearch']];
+  panels.forEach(([b, p, s]) => {
+    $(b).onclick = e => { e.stopPropagation(); panels.forEach(x => { if (x[1] !== p) $(x[1]).classList.add('hide'); }); $(p).classList.toggle('hide'); if (!$(p).classList.contains('hide')) $(s).focus(); };
+    $(p).onclick = e => e.stopPropagation();
+  });
+  document.addEventListener('click', () => panels.forEach(x => $(x[1]).classList.add('hide')));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') panels.forEach(x => $(x[1]).classList.add('hide')); });
+  $('chanSearch').oninput = renderChanList;
+  $('chanAll').onclick = () => { const q = $('chanSearch').value.trim().toLowerCase(); chanUniverse().filter(c => !q || c.toLowerCase().includes(q)).forEach(c => state.chans.add(c)); afterChanChange(true); };
+  $('chanClear').onclick = () => { state.chans.clear(); afterChanChange(true); };
   $('campSearch').oninput = renderCampList;
   $('campAll').onclick = () => {
     const q = $('campSearch').value.trim().toLowerCase();
