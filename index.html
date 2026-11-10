@@ -244,7 +244,10 @@ const $ = id => document.getElementById(id);
 
 /* ================= CONFIG — edit here if the sheet or display changes ================= */
 /* Paste the Apps Script web app URL (ends in /exec) between the quotes. */
-const DATA_URL ='https://script.google.com/macros/s/AKfycbz75hPGmuyShY91ZzHx077WOrQYR0mr9GvwrcIi9tfFsRPimSzi88khhh4VisnaYgk/exec';
+const DATA_URL = 'https://script.google.com/macros/s/AKfycbz75hPGmuyShY91ZzHx077WOrQYR0mr9GvwrcIi9tfFsRPimSzi88khhh4VisnaYgk/exec';
+/* Timezone of the Google Sheet. Date cells sent as full timestamps (e.g. 2026-11-04T18:30:00.000Z)
+   are converted to this timezone first, so IST midnight is never read as the previous day. */
+const SHEET_TZ = 'Asia/Kolkata';
 const DEFAULT_PERIOD = 'yesterday';           // 'yesterday' = latest day in the sheet
 /* Ratios are divisions (e.g. Clicks / Impressions).
    'percent' shows them ×100 with a % sign (2.86%); 'decimal' shows the raw result (0.0286). */
@@ -304,6 +307,13 @@ function toISO(v) {
   const s = v.trim().replace(/\s+/g, ' ');
   if (!s) return null;
   let m;
+  // Full timestamp with a timezone (what Google returns for real date cells): convert to the sheet's timezone first.
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+\-]\d{2}:?\d{2})$/.test(s)) {
+    const t = new Date(s);
+    if (isNaN(t)) return null;
+    const p = {}; new Intl.DateTimeFormat('en-GB', { timeZone: SHEET_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(t).forEach(x => p[x.type] = x.value);
+    return ymd(p.year, p.month, p.day);
+  }
   if ((m = /^(\d{4})[\-\/.](\d{1,2})[\-\/.](\d{1,2})(?:[ T].*)?$/.exec(s))) return ymd(m[1], m[2], m[3]);                    // 2026-10-06
   if ((m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?: .*)?$/.exec(s)))                                                   // 06/10/2026, 6-10-26
     return DATE_ORDER === 'MDY' ? ymd(m[3], m[1], m[2]) : ymd(m[3], m[2], m[1]);
