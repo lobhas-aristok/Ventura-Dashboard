@@ -459,11 +459,19 @@ function mergeSecond(model, table, srcName) {
 }
 
 /* ---------- date range engine ---------- */
+/* "Yesterday" in India time, based on today's date (not the latest date in the sheet) */
+function yesterdayIST() {
+  const p = {};
+  new Intl.DateTimeFormat('en-GB', { timeZone: SHEET_TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(new Date()).forEach(x => p[x.type] = x.value);
+  return addDays(p.year + '-' + p.month + '-' + p.day, -1);
+}
 function presetRange(p) {
-  if (p === 'yesterday') return [MAXD, MAXD];
-  if (p === 'l7') return [addDays(MAXD, -6), MAXD];
-  if (p === 'mtd') return [MAXD.slice(0, 7) + '-01', MAXD];
-  return [MIND, MAXD];
+  const Y = yesterdayIST();
+  if (p === 'yesterday') return [Y, Y];                    // Yesterday
+  if (p === 'l7') return [addDays(Y, -6), Y];              // Last 7 days, ending yesterday
+  if (p === 'mtd') return [Y.slice(0, 7) + '-01', Y];      // Month to date, up to yesterday
+  return [MIND, MAXD];                                     // All available
 }
 function pickRange(fromId, toId, fallback) {
   const f = $(fromId).value, t = $(toId).value;
