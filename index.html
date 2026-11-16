@@ -56,8 +56,13 @@ body{font-family:"Segoe UI",Inter,Arial,sans-serif;background:var(--page);color:
 .ctx .cb{color:var(--cur)}.ctx .co{color:var(--cmp-ink)}
 .chip{background:#e8f3ff;color:#1559a8;border-radius:14px;padding:3px 9px;font-weight:600;cursor:pointer;font-size:11.5px}
 .chip:hover{background:#d5e9ff}
-.kpis{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px;margin-bottom:12px}
-.kpis.k15{grid-template-columns:repeat(5,minmax(0,1fr))}
+.kpis{margin-bottom:12px}
+.kgroup{margin-bottom:12px}
+.kgroup h4{margin:0 0 6px 2px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#475467}
+.kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.kgrid.six{grid-template-columns:repeat(6,minmax(0,1fr))}
+.fbranch{margin-top:8px;padding-top:6px;border-top:1px dashed var(--line)}
+.fbranch h5{margin:2px 0 2px;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#475467;text-align:center}
 .kpi .d small{font-size:9px;margin-left:1px}
 .fcac{margin-top:6px;padding:9px 8px;border-radius:8px;background:#f3f8ff;display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:12.5px;cursor:pointer;border:2px solid transparent}
 .fcac.active{border-color:var(--cur)}
@@ -122,9 +127,9 @@ details{margin-top:12px;padding:12px 14px}
 details summary{cursor:pointer;font-weight:700;font-size:12px;color:#344054}
 details .body{margin-top:8px;font-size:12px;line-height:1.65;color:#344054}
 details .body ul{margin:4px 0 8px 18px;padding:0}
-@media(max-width:1300px){.kpis,.kpis.k15{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:1300px){.kgrid.six{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:1100px){#pFunnel,#pTrend,#pMtd,#pDist,#pGauge{grid-column:1/-1;grid-row:auto}}
-@media(max-width:600px){.kpis,.kpis.k15{grid-template-columns:repeat(2,minmax(0,1fr))}.top h1{font-size:20px}}
+@media(max-width:600px){.kgrid,.kgrid.six{grid-template-columns:repeat(2,minmax(0,1fr))}.top h1{font-size:20px}}
 </style>
 </head>
 <body>
@@ -190,7 +195,7 @@ details .body ul{margin:4px 0 8px 18px;padding:0}
     </div>
     <div class="legend cmpLegend hide"><span><i style="background:var(--cur)"></i>Selected period</span><span><i style="background:var(--cmp)"></i>Comparison period</span></div>
     <div id="funnel"></div>
-    <div class="note" style="margin-top:8px">Click a stage to rank the distribution chart and table by that metric. Installs, E-KYCs and E-Signs are counted on the day they happen, so stages are not a strict single-user path.</div>
+    <div class="note" style="margin-top:8px">Click a stage to rank the distribution chart and table by that metric. Installs, E-KYCs, E-Signs, Leads and Account Opens are counted on the day they happen, so stages are not a strict single-user path.</div>
   </div>
 
   <div class="card panel" id="pTrend">
@@ -274,6 +279,9 @@ const COL = {
 /* ===================================================================================== */
 
 const REQUIRED = Object.values(COL);
+/* Second file ("Overall" tab of the Leads / Account Open file). Only Leads and Account Open are taken from it;
+   Impressions, Clicks, Amount Spent and Installs always come from the first file, so cost is never double-counted. */
+const COL2 = { day: 'Day', campaign: 'Campaign Name', channel: 'Channel', leads: 'Leads', ao: 'Account Open' };
 const DIRECT = 'Direct';   // channel with no spend by design (people who saw the ads but came to the platform directly)
 const UNMAPPED = '(unmapped)', BLANKNAME = '(blank campaign name)';
 
@@ -380,7 +388,7 @@ function ingest(table, srcName){
       Day: day, Campaign: name || BLANKNAME,
       Channel: ch && ch !== '#ERR' ? ch : UNMAPPED,
       Impressions: numOf(g(r, COL.impressions), COL.impressions), Clicks: numOf(g(r, COL.clicks), COL.clicks), Spend: numOf(g(r, COL.spend), COL.spend),
-      Installs: numOf(g(r, COL.installs), COL.installs), EKYC: numOf(g(r, COL.ekyc), COL.ekyc), ESign: numOf(g(r, COL.esign), COL.esign)
+      Installs: numOf(g(r, COL.installs), COL.installs), EKYC: numOf(g(r, COL.ekyc), COL.ekyc), ESign: numOf(g(r, COL.esign), COL.esign), Leads: 0, AO: 0
     };
     if (!name) M.blankName++;
     if (rec.Channel === UNMAPPED) { M.unmappedRows++; if (name) M.unmappedCampaigns.add(name); }
@@ -400,6 +408,54 @@ function ingest(table, srcName){
   const byMonth = {}; rows.forEach(r => { const k = r.Day.slice(0, 7); (byMonth[k] = byMonth[k] || { rows: 0, Spend: 0, Installs: 0, EKYC: 0, ESign: 0, days: new Set() }); const b = byMonth[k]; b.rows++; b.Spend += r.Spend; b.Installs += r.Installs; b.EKYC += r.EKYC; b.ESign += r.ESign; b.days.add(r.Day); });
   M.byMonth = byMonth;
   return { rows, meta: M };
+}
+
+/* ---------- second file: Leads + Account Open, merged by Day + Campaign + Channel ---------- */
+function mergeSecond(model, table, srcName) {
+  const M = model.meta, rows = model.rows;
+  const S = { connected: true, srcName: srcName, rows: 0, matched: 0, added: 0, outOfRange: 0, outSamples: [], skippedDate: 0, skippedSamples: [], nonNumeric: 0, nonNumericSamples: [], dups: 0 };
+  M.second = S;
+  const idx = {}; table.headers.forEach((h, i) => idx[String(h).trim()] = i);
+  const missing = Object.values(COL2).filter(c => !(c in idx));
+  if (missing.length) { S.error = 'Second file is missing these columns: ' + missing.join(', ') + '. Leads and Account Open are not included.'; return; }
+  const g = (r, n) => r[idx[n]];
+  const det = detectDateOrder(table.rows.map(r => r[idx[COL2.day]])); DATE_ORDER = det.order;
+  const numOf = v => {
+    if (v == null || v === '') return 0;
+    if (typeof v === 'number') return v;
+    const t = String(v).replace(/[,₹\s]/g, '');
+    if (t === '' || t === '-') return 0;
+    const f = Number(t);
+    if (isFinite(f)) return f;
+    S.nonNumeric++; if (S.nonNumericSamples.length < 4) S.nonNumericSamples.push(String(v)); return 0;
+  };
+  const dimOf = v => { if (v == null) return null; const t = String(v).trim(); return t === '' || t === '-' || t.charAt(0) === '#' ? null : t; };
+  const agg2 = {}, seen = {};
+  for (const r of table.rows) {
+    const raw = g(r, COL2.day), day = toISO(raw);
+    const L = numOf(g(r, COL2.leads)), A = numOf(g(r, COL2.ao));
+    if (!day) { if ((raw == null || String(raw).trim() === '') && !L && !A) continue; S.skippedDate++; if (S.skippedSamples.length < 6) S.skippedSamples.push(String(raw)); continue; }
+    const camp = dimOf(g(r, COL2.campaign)) || BLANKNAME, ch = dimOf(g(r, COL2.channel)) || UNMAPPED;
+    const k = day + '|' + ch + '|' + camp;
+    if (seen[k]) S.dups++; seen[k] = 1;
+    (agg2[k] = agg2[k] || { Day: day, Campaign: camp, Channel: ch, Leads: 0, AO: 0 }); agg2[k].Leads += L; agg2[k].AO += A;
+    S.rows++;
+  }
+  const byKey = {}; rows.forEach(r => { byKey[r.Day + '|' + r.Channel + '|' + r.Campaign] = r; });
+  Object.keys(agg2).forEach(k => {
+    const x = agg2[k], hit = byKey[k];
+    if (hit) { hit.Leads += x.Leads; hit.AO += x.AO; S.matched++; return; }
+    if (x.Day < M.dateMin || x.Day > M.dateMax) {       // outside the first file's dates: not shown, flagged
+      if (x.Leads || x.AO) { S.outOfRange++; if (S.outSamples.length < 5) S.outSamples.push(lblFull(x.Day) + ' · ' + x.Campaign); }
+      return;
+    }
+    rows.push({ Day: x.Day, Campaign: x.Campaign, Channel: x.Channel, Impressions: 0, Clicks: 0, Spend: 0, Installs: 0, EKYC: 0, ESign: 0, Leads: x.Leads, AO: x.AO });
+    S.added++;
+  });
+  rows.sort((a, b) => a.Day < b.Day ? -1 : a.Day > b.Day ? 1 : 0);
+  M.rows = rows.length; M.campaigns = new Set(rows.map(r => r.Campaign)).size; M.totals = agg(rows);
+  const byMonth = {}; rows.forEach(r => { const k = r.Day.slice(0, 7); (byMonth[k] = byMonth[k] || { rows: 0, Spend: 0, Installs: 0, EKYC: 0, ESign: 0, Leads: 0, AO: 0, days: new Set() }); const b = byMonth[k]; b.rows++; b.Spend += r.Spend; b.Installs += r.Installs; b.EKYC += r.EKYC; b.ESign += r.ESign; b.Leads += r.Leads; b.AO += r.AO; b.days.add(r.Day); });
+  M.byMonth = byMonth;
 }
 
 /* ---------- date range engine ---------- */
@@ -433,7 +489,7 @@ function pick(range, f, opts) {
     (opts.ignoreChannel || !f.chans.size || f.chans.has(r.Channel)) &&
     (opts.ignoreCamps || !f.camps.size || f.camps.has(r.Campaign)));
 }
-const BASE = ['Spend','Impressions','Clicks','Installs','EKYC','ESign'];
+const BASE = ['Spend','Impressions','Clicks','Installs','EKYC','ESign','Leads','AO'];
 const div = (a, b) => b ? a / b : null;   // null shows as "—" (no divide-by-zero)
 function agg(rows) {
   const o = {}; BASE.forEach(k => o[k] = 0);
@@ -447,6 +503,10 @@ function agg(rows) {
   o.K_CAC  = div(o.Spend,    o.EKYC);          // Cost / E-KYC
   o.K2S    = div(o.ESign,    o.EKYC);          // E-Sign / E-KYC
   o.S_CAC  = div(o.Spend,    o.ESign);         // Cost / E-Sign
+  o.I2L    = div(o.Leads,    o.Installs);      // Leads / Installs
+  o.CPL    = div(o.Spend,    o.Leads);         // Cost / Leads
+  o.L2AO   = div(o.AO,       o.Leads);         // Account Open / Leads
+  o.AO_CAC = div(o.Spend,    o.AO);            // Cost / Account Open
   return o;
 }
 function groupBy(rows, key) { const g = {}; rows.forEach(r => (g[r[key]] = g[r[key]] || []).push(r)); return g; }
@@ -477,23 +537,30 @@ function delta(a, b, lower) {
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* ---------- metric catalogue: [label, key, format, lowerIsBetter, formula] ---------- */
-const ALL_METRICS = [
-  ['Cost', 'Spend', 'money', false, 'Amount Spent'],
-  ['Impressions', 'Impressions', 'num', false, ''],
-  ['Clicks', 'Clicks', 'num', false, ''],
-  ['CTR', 'CTR', 'rate', false, 'Clicks ÷ Impressions'],
-  ['CPC', 'CPC', 'unit', true, 'Cost ÷ Clicks'],
-  ['CPM', 'CPM', 'unit', true, 'Cost ÷ Impressions × 1,000', 'metaOnly'],
-  ['Installs', 'Installs', 'num', false, ''],
-  ['CPI', 'CPI', 'unit', true, 'Cost ÷ Installs'],
-  ['Click to Install', 'C2I', 'rate', false, 'Installs ÷ Clicks'],
-  ['E-KYC', 'EKYC', 'num', false, ''],
-  ['Installs to E-KYC %', 'I2K', 'rate', false, 'E-KYC ÷ Installs'],
-  ['Cost per E-KYC', 'K_CAC', 'unit', true, 'Cost ÷ E-KYC'],
-  ['E-Sign', 'ESign', 'num', false, ''],
-  ['E-KYC to E-Sign %', 'K2S', 'rate', false, 'E-Sign ÷ E-KYC'],
-  ['E-Sign CAC', 'S_CAC', 'unit', true, 'Cost ÷ E-Sign']
+const ALL_METRICS = [   // [label, key, format, lowerIsBetter, formula, flag, group]
+  ['Cost', 'Spend', 'money', false, 'Amount Spent', '', 'top'],
+  ['Impressions', 'Impressions', 'num', false, '', '', 'top'],
+  ['Clicks', 'Clicks', 'num', false, '', '', 'top'],
+  ['CTR', 'CTR', 'rate', false, 'Clicks ÷ Impressions', '', 'top'],
+  ['CPC', 'CPC', 'unit', true, 'Cost ÷ Clicks', '', 'top'],
+  ['CPM', 'CPM', 'unit', true, 'Cost ÷ Impressions × 1,000', 'metaOnly', 'top'],
+  ['Installs', 'Installs', 'num', false, '', '', 'top'],
+  ['CPI', 'CPI', 'unit', true, 'Cost ÷ Installs', '', 'top'],
+  ['Click to Install', 'C2I', 'rate', false, 'Installs ÷ Clicks', '', 'top'],
+  ['E-KYC', 'EKYC', 'num', false, '', '', 'esign'],
+  ['Installs to E-KYC %', 'I2K', 'rate', false, 'E-KYC ÷ Installs', '', 'esign'],
+  ['Cost per E-KYC', 'K_CAC', 'unit', true, 'Cost ÷ E-KYC', '', 'esign'],
+  ['E-Sign', 'ESign', 'num', false, '', '', 'esign'],
+  ['E-KYC to E-Sign %', 'K2S', 'rate', false, 'E-Sign ÷ E-KYC', '', 'esign'],
+  ['E-Sign CAC', 'S_CAC', 'unit', true, 'Cost ÷ E-Sign', '', 'esign'],
+  ['Leads', 'Leads', 'num', false, '', '', 'leads'],
+  ['Installs to Leads %', 'I2L', 'rate', false, 'Leads ÷ Installs', '', 'leads'],
+  ['CPL', 'CPL', 'unit', true, 'Cost ÷ Leads', '', 'leads'],
+  ['Account Open (AO)', 'AO', 'num', false, '', '', 'leads'],
+  ['Leads to AO %', 'L2AO', 'rate', false, 'AO ÷ Leads', '', 'leads'],
+  ['AO CAC', 'AO_CAC', 'unit', true, 'Cost ÷ AO', '', 'leads']
 ];
+const KGROUPS = [['top', 'Top of funnel'], ['esign', 'E-KYC → E-Sign'], ['leads', 'Leads → Account Open']];
 /* CPM only when Meta is the only channel ticked */
 const metaOnly = () => state.chans.size === 1 && state.chans.has('Meta');
 let METRICS = ALL_METRICS.filter(m => m[5] !== 'metaOnly');
@@ -630,36 +697,49 @@ function renderCtx(cur, cmp) {
   });
 }
 function renderCards(a, p) {
-  $('kpis').classList.toggle('k15', METRICS.length === 15);
-  $('kpis').innerHTML = METRICS.map(c =>
+  const card = c =>
     '<div class="card kpi" title="' + esc(c[4] || c[0]) + '"><div class="l">' + c[0] + '</div><div class="v">' + FMT[c[2]](a[c[1]]) + '</div>' +
     '<div class="f">' + (c[4] && c[4] !== 'Amount Spent' ? esc(c[4]) : '&nbsp;') + '</div>' +
     (p ? '<div class="cv">vs ' + FMT[c[2]](p[c[1]]) + '</div><div class="d" title="% change = current ÷ previous − 1">' + delta(a[c[1]], p[c[1]], c[3]) + '</div>' : '') +
-    '</div>').join('');
+    '</div>';
+  $('kpis').innerHTML = KGROUPS.map(gp => {
+    const list = METRICS.filter(m => m[6] === gp[0]);
+    return '<div class="kgroup"><h4>' + gp[1] + '</h4><div class="kgrid' + (gp[0] === 'top' ? '' : ' six') + '">' + list.map(card).join('') + '</div></div>';
+  }).join('');
 }
 
-const STAGES = [['Impressions', 'Impressions'], ['Clicks', 'Clicks'], ['Installs', 'Installs'], ['E-KYC', 'EKYC'], ['E-Sign', 'ESign']];
+const STAGES_TOP = [['Impressions', 'Impressions'], ['Clicks', 'Clicks'], ['Installs', 'Installs']];
+const BRANCHES = [
+  ['E-KYC → E-Sign', [['E-KYC', 'EKYC'], ['E-Sign', 'ESign']], ['E-Sign CAC', 'S_CAC', 'Cost ÷ E-Sign']],
+  ['Leads → Account Open', [['Leads', 'Leads'], ['Account Open', 'AO']], ['AO CAC', 'AO_CAC', 'Cost ÷ AO']]
+];
 function renderFunnel(a, p) {
   const mode = state.funnelScale, ref = Math.max(a.Impressions || 0, p ? (p.Impressions || 0) : 0);
   const width = v => {
     let w = mode === 'log' ? (ref ? 100 * Math.log10(1 + v) / Math.log10(1 + ref) : 0) : (ref ? v / ref * 100 : 0);
     return Math.min(100, Math.max(w, 1.5));
   };
-  $('funnel').innerHTML = STAGES.map((s, i) => {
-    const v = a[s[1]] || 0, prev = i ? (a[STAGES[i - 1][1]] || 0) : null;
-    const pv = p ? (p[s[1]] || 0) : null, pprev = p && i ? (p[STAGES[i - 1][1]] || 0) : null;
-    const meta = i === 0 ? 'Top of funnel' : s[0] + ' ÷ ' + STAGES[i - 1][0] + ': ' + rate(div(v, prev)) + (p ? ' <span class="co">· vs ' + rate(div(pv, pprev)) + '</span>' : '');
+  const stage = (s, prevS) => {
+    const v = a[s[1]] || 0, prev = prevS ? (a[prevS[1]] || 0) : null;
+    const pv = p ? (p[s[1]] || 0) : null, pprev = p && prevS ? (p[prevS[1]] || 0) : null;
+    const meta = !prevS ? 'Top of funnel' : s[0] + ' ÷ ' + prevS[0] + ': ' + rate(div(v, prev)) + (p ? ' <span class="co">· vs ' + rate(div(pv, pprev)) + '</span>' : '');
     return '<div class="fstage' + (state.focus === s[1] ? ' active' : '') + '" data-k="' + s[1] + '"><div class="fhead"><span>' + s[0] + '</span><span><span class="fv">' + num(v) + '</span>' +
       (p ? ' <span class="fvc">vs ' + num(pv) + '</span>' : '') + '</span></div>' +
       '<div class="ftrack"><div class="fbar" style="width:' + width(v).toFixed(2) + '%"></div></div>' +
       (p ? '<div class="ftrack"><div class="fbar c" style="width:' + width(pv).toFixed(2) + '%"></div></div>' : '') +
       '<div class="fmeta">' + meta + '</div></div>';
-  }).join('') +
-  '<div class="fcac' + (state.focus === 'S_CAC' ? ' active' : '') + '" data-k="S_CAC" title="Cost ÷ E-Sign"><span>E-Sign CAC <span class="note" style="font-weight:500">(Cost ÷ E-Sign)</span></span><span>' + unit(a.S_CAC) + (p ? ' <span class="fvc">vs ' + unit(p.S_CAC) + '</span>' : '') + '</span></div>';
+  };
+  const cac = c => '<div class="fcac' + (state.focus === c[1] ? ' active' : '') + '" data-k="' + c[1] + '" title="' + c[2] + '"><span>' + c[0] + ' <span class="note" style="font-weight:500">(' + c[2] + ')</span></span><span>' + unit(a[c[1]]) + (p ? ' <span class="fvc">vs ' + unit(p[c[1]]) + '</span>' : '') + '</span></div>';
+  let h = STAGES_TOP.map((s, i) => stage(s, i ? STAGES_TOP[i - 1] : null)).join('');
+  BRANCHES.forEach(b => {
+    h += '<div class="fbranch"><h5>' + b[0] + '</h5>' + b[1].map((s, i) => stage(s, i ? b[1][i - 1] : STAGES_TOP[2])).join('') + cac(b[2]) + '</div>';
+  });
+  $('funnel').innerHTML = h;
   $('funnel').querySelectorAll('[data-k]').forEach(el => el.onclick = () => {
     const k = el.dataset.k;
     state.focus = state.focus === k ? null : k;
-    $('distMetric').value = state.focus || 'Spend'; state.sortKey = state.focus || 'Spend'; state.sortDir = k === 'S_CAC' && state.focus ? 1 : -1;
+    const lower = state.focus && mDef(k)[3];
+    $('distMetric').value = state.focus || 'Spend'; state.sortKey = state.focus || 'Spend'; state.sortDir = lower ? 1 : -1;
     render();
   });
 }
@@ -856,10 +936,18 @@ function renderTable(cur, cmp, f) {
   $('tbl').querySelectorAll('tr.row').forEach(tr => tr.onclick = () => toggleCamp(tr.dataset.c));
 }
 
+function secondNote() {
+  const S = META.second;
+  if (!S) return '<b>Leads / Account Open file.</b> Not connected: the data link did not return the second file, so Leads, AO and their ratios show 0 or “—”.<br>';
+  if (S.error) return '<b>Leads / Account Open file.</b> ' + esc(S.error) + '<br>';
+  return '<b>Leads / Account Open file.</b> ' + esc(S.srcName) + ' · ' + num(S.rows) + ' rows read · ' + num(S.matched) + ' campaign-days matched to file 1 · ' + num(S.added) + ' campaign-day(s) only in file 2 (added with ₹0 cost)' +
+    (S.outOfRange ? ' · <b>' + num(S.outOfRange) + ' campaign-day(s) outside file 1’s dates were left out</b> (e.g. ' + S.outSamples.map(esc).join('; ') + ')' : '') +
+    (S.dups ? ' · ' + S.dups + ' repeated Day + Campaign + Channel row(s) were added together' : '') + '.<br>';
+}
 function renderNotes() {
   const M = META, T = M.totals, nn = M.nonNumeric;
   const issues = [];
-  if (M.zeroSpendConv) issues.push(M.zeroSpendConv + ' row(s) outside the Direct channel have Installs / E-KYC / E-Sign but ₹0 cost (' + Object.keys(M.zeroSpendConvByCh).map(k => esc(k) + ': ' + M.zeroSpendConvByCh[k]).join(', ') + '). Their conversions are included in totals, which lowers blended CPI and CACs. Filter by channel to check.');
+  if (M.zeroSpendConv) issues.push(M.zeroSpendConv + ' row(s) outside the Direct channel have Installs / E-KYC / E-Sign but ₹0 cost (' + Object.keys(M.zeroSpendConvByCh).map(k => esc(k) + ': ' + M.zeroSpendConvByCh[k]).join(', ') + '). Their conversions are included in totals, which lowers blended CPI, CPL and CACs. Filter by channel to check.');
   if (M.blankName) issues.push(M.blankName + ' row(s) have no campaign name; shown as “' + BLANKNAME + '”.');
   if (M.unmappedRows) issues.push(M.unmappedRows + ' row(s) have a blank, “-” or error Channel (' + (M.unmappedCampaigns.length ? 'campaigns: ' + M.unmappedCampaigns.map(esc).join('; ') : 'no named campaign') + '); shown as “' + UNMAPPED + '”.');
   if (M.dupPairs) issues.push(M.dupPairs + ' Day + Channel + Campaign combination(s) appear on more than one row. They are added together, so check they are not double-counted.');
@@ -871,14 +959,14 @@ function renderNotes() {
   const formulas = ALL_METRICS.filter(m => m[2] === 'rate' || m[2] === 'unit').map(m => esc(m[0]) + ' = ' + esc(m[4]) + (m[2] === 'rate' && RATIO_DISPLAY === 'percent' ? ' × 100' : '') + (m[5] === 'metaOnly' ? ' (shown when only Meta is selected)' : '')).join(' · ');
   $('notesBody').innerHTML =
     '<b>Source.</b> ' + esc(M.srcName) + ' · ' + num(M.rows) + ' rows · ' + num(M.campaigns) + ' campaigns · ' + lblFull(M.dateMin) + ' to ' + lblFull(M.dateMax) + '. All rows in the tab are read, whatever filter view is applied in Google Sheets. Dates are read in India time (IST).<br>' +
-    '<b>Columns used.</b> Day, Campaign Name, Channel, Impressions, Clicks, Amount Spent (= Cost), Installs, E-KYC, E-Sign. Other columns are not used.<br>' +
-    '<b>Direct channel.</b> Direct = people who saw the ads but came to the platform directly. It has no spend of its own, and its Installs, E-KYCs and E-Signs are included in “All channels” totals and blended CPI / CACs (total cost ÷ total conversions). Tick only Google or Meta to see them on their own.<br>' +
+    '<b>Columns used.</b> File 1: Day, Campaign Name, Channel, Impressions, Clicks, Amount Spent (= Cost), Installs, E-KYC, E-Sign. File 2: Day, Campaign Name, Channel, Leads, Account Open, matched to file 1 by Day + Campaign + Channel. Cost, impressions, clicks and installs come only from file 1, so nothing is double-counted. Other columns are not used.<br>' + secondNote() +
+    '<b>Direct channel.</b> Direct = people who saw the ads but came to the platform directly. It has no spend of its own, and its Installs, E-KYCs, E-Signs, Leads and Account Opens are included in “All channels” totals and blended CPI / CPL / CACs (total cost ÷ total conversions). Tick only Google or Meta to see them on their own.<br>' +
     '<b>Formulas.</b> ' + formulas + '. Every ratio is recalculated from the summed raw fields for the selected range (never an average of daily ratios). A zero denominator shows “—”.<br>' +
     '<b>Comparison.</b> Off by default. When on, the comparison period is either the previous period of the same length or a custom range. Blue = selected period, orange = comparison period. % change = current ÷ previous − 1 for every metric (green = better, so a lower cost metric shows green). Trend lines and daily bars line the two periods up day 1 vs day 1. The month-to-date chart always compares with the same days of the previous month.<br>' +
-    '<b>Sheet totals (all rows).</b> Cost ' + money(T.Spend) + ' · Impressions ' + num(T.Impressions) + ' · Clicks ' + num(T.Clicks) + ' · Installs ' + num(T.Installs) + ' · E-KYC ' + num(T.EKYC) + ' · E-Sign ' + num(T.ESign) + '.<br>' +
+    '<b>Sheet totals (all rows).</b> Cost ' + money(T.Spend) + ' · Impressions ' + num(T.Impressions) + ' · Clicks ' + num(T.Clicks) + ' · Installs ' + num(T.Installs) + ' · E-KYC ' + num(T.EKYC) + ' · E-Sign ' + num(T.ESign) + ' · Leads ' + num(T.Leads) + ' · Account Open ' + num(T.AO) + '.<br>' +
     '<b>Cost by channel.</b> ' + ch + '.<br>' +
-    '<b>Rows by month (for reconciliation with the sheet).</b><div class="tw" style="max-height:none;margin:4px 0 8px"><table style="width:auto"><thead><tr><th>Month</th><th>Days</th><th>Rows</th><th>Cost</th><th>Installs</th><th>E-KYC</th><th>E-Sign</th></tr></thead><tbody>' +
-      Object.keys(M.byMonth).sort().map(k => { const b = M.byMonth[k]; return '<tr><td>' + MON[+k.slice(5) - 1] + ' ' + k.slice(0, 4) + '</td><td>' + b.days.size + '</td><td>' + num(b.rows) + '</td><td>' + money(b.Spend) + '</td><td>' + num(b.Installs) + '</td><td>' + num(b.EKYC) + '</td><td>' + num(b.ESign) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
+    '<b>Rows by month (for reconciliation with the sheet).</b><div class="tw" style="max-height:none;margin:4px 0 8px"><table style="width:auto"><thead><tr><th>Month</th><th>Days</th><th>Rows</th><th>Cost</th><th>Installs</th><th>E-KYC</th><th>E-Sign</th><th>Leads</th><th>AO</th></tr></thead><tbody>' +
+      Object.keys(M.byMonth).sort().map(k => { const b = M.byMonth[k]; return '<tr><td>' + MON[+k.slice(5) - 1] + ' ' + k.slice(0, 4) + '</td><td>' + b.days.size + '</td><td>' + num(b.rows) + '</td><td>' + money(b.Spend) + '</td><td>' + num(b.Installs) + '</td><td>' + num(b.EKYC) + '</td><td>' + num(b.ESign) + '</td><td>' + num(b.Leads || 0) + '</td><td>' + num(b.AO || 0) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
     '<b>Data-quality flags (nothing was corrected silently):</b>' + (issues.length ? '<ul><li>' + issues.join('</li><li>') + '</li></ul>' : ' none found.<br>');
 }
 function renderWarn() {
@@ -886,6 +974,14 @@ function renderWarn() {
   if (M.skippedDate) w.push('<b>' + num(M.skippedDate) + ' row(s) are missing from the dashboard</b> because their Day value could not be read as a date (e.g. ' + M.skippedSamples.map(x => '“' + esc(x) + '”').join(', ') + '). Fix those cells in the sheet, then click Refresh data.');
   if (M.dateOrder.dmy && M.dateOrder.mdy) w.push('<b>Mixed date formats</b> in the Day column (some DD/MM, some MM/DD). Dates were read as ' + (M.dateOrder.order === 'DMY' ? 'DD/MM/YYYY' : 'MM/DD/YYYY') + '; some days may be wrong until the column is made consistent.');
   if (M.nonNumericTotal) w.push('<b>' + num(M.nonNumericTotal) + ' cell(s) in number columns are not numbers</b> (' + Object.keys(M.nonNumericCells).map(k => esc(k) + ': ' + M.nonNumeric[k] + ', e.g. “' + esc(M.nonNumericCells[k]) + '”').join('; ') + ') and were counted as 0. Fix them in the sheet, then click Refresh data.');
+  const S = M.second;
+  if (!S) w.push('<b>Leads / Account Open file not connected.</b> The data link only returned the first file. Update the Apps Script (Code.gs with SHEET_ID_2) and deploy a new version.');
+  else if (S.error) w.push('<b>' + esc(S.error) + '</b>');
+  else {
+    if (S.outOfRange) w.push('<b>' + num(S.outOfRange) + ' Leads / AO campaign-day(s) have dates outside the main file’s range</b> and are not counted (e.g. ' + S.outSamples.map(esc).join('; ') + '). Check the Day column of the Leads / AO file.');
+    if (S.skippedDate) w.push('<b>' + num(S.skippedDate) + ' row(s) in the Leads / AO file have an unreadable Day</b> (e.g. ' + S.skippedSamples.map(x => '“' + esc(x) + '”').join(', ') + ') and are not counted.');
+    if (S.nonNumeric) w.push('<b>' + num(S.nonNumeric) + ' Leads / AO cell(s) are not numbers</b> (e.g. ' + S.nonNumericSamples.map(x => '“' + esc(x) + '”').join(', ') + ') and were counted as 0.');
+  }
   const el = $('dqwarn'); el.innerHTML = w.join('<br>'); el.classList.toggle('hide', !w.length);
 }
 
@@ -935,6 +1031,8 @@ async function loadSharedData() {
     if (!Array.isArray(data.headers) || !Array.isArray(data.rows)) throw new Error('The data URL returned an unexpected format.');
     const src = 'Google Sheets (' + (data.sheetName || 'sheet') + ')';
     const model = ingest({ headers: data.headers, rows: data.rows }, src);
+    if (data.second && Array.isArray(data.second.headers) && Array.isArray(data.second.rows)) mergeSecond(model, data.second, 'Google Sheets (' + (data.second.sheetName || 'sheet') + ', Leads / AO file)');
+    else if (data.second && data.second.error) model.meta.second = { error: 'Leads / AO file: ' + data.second.error };
     installModel(model, src, CD.length > 0);
     const stamp = data.updatedAt ? new Date(data.updatedAt).toLocaleString() : new Date().toLocaleString();
     showMsg('ok', '<b>Data loaded.</b> ' + num(model.meta.rows) + ' rows · ' + num(model.meta.campaigns) + ' campaigns · ' + lblFull(model.meta.dateMin) + ' to ' + lblFull(model.meta.dateMax) + '. Last fetched: ' + esc(stamp) + '. Click “Refresh data” after the sheet changes.');
