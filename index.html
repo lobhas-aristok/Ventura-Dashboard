@@ -212,7 +212,7 @@ details .body ul{margin:4px 0 8px 18px;padding:0}
 
   <div class="card panel" id="pDist">
     <h3>Distribution</h3>
-    <div class="ctl">View by: <select id="viewBy"><option value="campaign">Campaign name</option><option value="channel">Channel</option><option value="day">Date</option></select>
+    <div class="ctl">View by: <select id="viewBy"><option value="campaign">Campaign name</option><option value="channel">Channel</option><option value="day">Date</option><optgroup label="Ad level (Cost / Impressions / Clicks only)"><option value="metaAdsets">Ad set (Meta)</option><option value="googleAdgroups">Ad group (Google)</option><option value="metaAds">Creative / Ad (Meta)</option><option value="metaPlacements">Placement (Meta)</option><option value="googleNetwork">Network (Google)</option></optgroup></select>
       Metric: <select id="distMetric"></select></div>
     <div class="legend cmpLegend hide"><span><i style="background:var(--cur)"></i>Selected period</span><span><i style="background:var(--cmp)"></i>Comparison period</span></div>
     <div class="dscroll" id="dScroll"><div class="dinner" id="dInner"><canvas id="cD"></canvas></div></div>
@@ -544,6 +544,41 @@ function delta(a, b, lower) {
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+/* ---------- ad-level breakdowns (Distribution chart only; sent by the web app as data.breakdowns) ---------- */
+const BDV = {
+  metaAdsets:     { label: 'Ad set', plural: 'ad sets', channel: 'Meta' },
+  googleAdgroups: { label: 'Ad group', plural: 'ad groups', channel: 'Google' },
+  metaAds:        { label: 'Creative / Ad', plural: 'ads', channel: 'Meta' },
+  metaPlacements: { label: 'Placement', plural: 'placements', channel: 'Meta' },
+  googleNetwork:  { label: 'Network', plural: 'networks', channel: 'Google' }
+};
+const BD_KEYS = ['Spend', 'Impressions', 'Clicks', 'CTR', 'CPC', 'CPM'];   // the only metrics these tabs can give
+let BD = {};
+const isBDView = () => !!BDV[$('viewBy').value];
+function parseBreakdowns(b) {
+  const out = {};
+  Object.keys(BDV).forEach(k => {
+    if (!b) { out[k] = { error: 'No ad-level data in the web app response yet – paste the new Code.gs and redeploy the web app (New version).' }; return; }
+    if (b.error) { out[k] = { error: b.error }; return; }
+    const t = b[k];
+    if (!t) { out[k] = { error: 'Not in the web app response – redeploy the web app with the new Code.gs.' }; return; }
+    if (t.error) { out[k] = { error: t.error }; return; }
+    const idx = {}; (t.headers || []).forEach((h, i) => idx[String(h).trim()] = i);
+    const saved = DATE_ORDER;
+    DATE_ORDER = detectDateOrder((t.rows || []).map(r => r[idx.Day])).order;
+    const rows = []; let badDates = 0;
+    (t.rows || []).forEach(r => {
+      const d = toISO(r[idx.Day]);
+      if (!d) { badDates++; return; }
+      rows.push({ Day: d, Campaign: String(r[idx.Campaign]).trim(), Item: String(r[idx.Item]).trim(),
+        Spend: Number(r[idx.Spend]) || 0, Impressions: Number(r[idx.Impressions]) || 0, Clicks: Number(r[idx.Clicks]) || 0 });
+    });
+    DATE_ORDER = saved;
+    out[k] = { rows, sheetName: t.sheetName || '', badDates };
+  });
+  return out;
+}
+
 /* ---------- metric catalogue: [label, key, format, lowerIsBetter, formula] ---------- */
 const ALL_METRICS = [   // [label, key, format, lowerIsBetter, formula, flag, group]
   ['Cost', 'Spend', 'money', false, 'Amount Spent', '', 'top'],
@@ -576,8 +611,9 @@ function refreshMetrics() {
   METRICS = ALL_METRICS.filter(m => m[5] !== 'metaOnly' || metaOnly());
   ['tmT', 'tmM', 'distMetric'].forEach(id => {
     const sel = $(id), cur = sel.value; sel.innerHTML = '';
-    METRICS.forEach(m => { const o = document.createElement('option'); o.value = m[1]; o.textContent = m[0]; sel.appendChild(o); });
-    sel.value = METRICS.some(m => m[1] === cur) ? cur : (id === 'tmM' ? 'ESign' : 'Spend');
+    const list = id === 'distMetric' && isBDView() ? ALL_METRICS.filter(m => BD_KEYS.includes(m[1])) : METRICS;
+    list.forEach(m => { const o = document.createElement('option'); o.value = m[1]; o.textContent = m[0]; sel.appendChild(o); });
+    sel.value = list.some(m => m[1] === cur) ? cur : (id === 'tmM' ? 'ESign' : 'Spend');
   });
   if (!METRICS.some(m => m[1] === state.sortKey) && state.sortKey !== 'Campaign' && state.sortKey !== 'Channel') state.sortKey = 'Spend';
   if (state.focus && !METRICS.some(m => m[1] === state.focus)) state.focus = null;
@@ -828,6 +864,23 @@ function renderDist(cur, cmp, f) {
     onPick = i => { if (keys[i]) setSingleDay(keys[i]); };
     $('distNote').textContent = (cur[0] === cur[1] ? 'Showing the 7 days to ' + lblFull(cur[1]) + '. ' : '') + 'Click a bar to filter to that day.' + (cmp ? ' Comparison days are lined up day 1 vs day 1.' : '');
     var tipTitle = i => (cd[i] ? 'Selected ' + lblFull(cd[i]) : '') + (pd && pd[i] ? (cd[i] ? ' · ' : '') + 'Comparison ' + lblFull(pd[i]) : '');
+  } else if (BDV[viewBy]) {
+    const V = BDV[viewBy], src = BD[viewBy] || { error: 'No ad-level data loaded.' };
+    const chOK = !f.chans.size || f.chans.has(V.channel);
+    const take = rng => (src.rows || []).filter(r => inR(r.Day, rng) && (!f.camps.size || f.camps.has(r.Campaign)));
+    const cg = chOK ? groupBy(take(cur), 'Item') : {}, pg = cmp && chOK ? groupBy(take(cmp), 'Item') : {};
+    const items = [...new Set(Object.keys(cg).concat(Object.keys(pg)))]
+      .map(k => ({ k, a: agg(cg[k] || [])[mk], b: cmp ? agg(pg[k] || [])[mk] : null }))
+      .filter(x => !bad(x.a) || !bad(x.b))
+      .sort((x, y) => (bad(y.a) ? -Infinity : y.a) - (bad(x.a) ? -Infinity : x.a) || (bad(y.b) ? -Infinity : y.b) - (bad(x.b) ? -Infinity : x.b));
+    keys = items.map(x => x.k); labels = keys.map(k => k.length > 34 ? k.slice(0, 33) + '…' : k);
+    cv = items.map(x => bad(x.a) ? null : x.a); pv = items.map(x => bad(x.b) ? null : x.b);
+    onPick = () => {};
+    $('distNote').textContent = src.error ? src.error
+      : !chOK ? V.channel + ' is not in the channel filter – add it to see ' + V.plural + '.'
+      : V.label + ' level (' + V.channel + ', tab "' + src.sheetName + '"): ' + keys.length + ' ' + V.plural + (f.camps.size ? ' in the selected campaigns' : '') +
+        '; scroll to see more. Only Cost, Impressions, Clicks, CTR, CPC and CPM exist at this level.' + (src.badDates ? ' ' + src.badDates + ' rows skipped (unreadable date).' : '');
+    var tipTitle = i => keys[i] + ' · ' + V.channel;
   } else {
     const isCamp = viewBy === 'campaign', key = isCamp ? 'Campaign' : 'Channel';
     const opts = isCamp ? { ignoreCamps: true } : { ignoreChannel: true };
@@ -1041,6 +1094,7 @@ async function loadSharedData() {
     const model = ingest({ headers: data.headers, rows: data.rows }, src);
     if (data.second && Array.isArray(data.second.headers) && Array.isArray(data.second.rows)) mergeSecond(model, data.second, 'Google Sheets (' + (data.second.sheetName || 'sheet') + ', Leads / AO file)');
     else if (data.second && data.second.error) model.meta.second = { error: 'Leads / AO file: ' + data.second.error };
+    BD = parseBreakdowns(data.breakdowns);
     installModel(model, src, CD.length > 0);
     const stamp = data.updatedAt ? new Date(data.updatedAt).toLocaleString() : new Date().toLocaleString();
     showMsg('ok', '<b>Data loaded.</b> ' + num(model.meta.rows) + ' rows · ' + num(model.meta.campaigns) + ' campaigns · ' + lblFull(model.meta.dateMin) + ' to ' + lblFull(model.meta.dateMax) + '. Last fetched: ' + esc(stamp) + '. Click “Refresh data” after the sheet changes.');
@@ -1079,7 +1133,8 @@ async function loadSharedData() {
   };
   $('campClear').onclick = () => { state.camps.clear(); renderCampList(); render(); };
   $('tmT').onchange = $('tmM').onchange = () => { if (CD.length) { const cur = currentRange(); renderTrends(F(), cur, cmpOn() ? compareRange(cur) : null); } };
-  $('viewBy').onchange = $('distMetric').onchange = () => { state.focus = null; render(); };
+  $('viewBy').onchange = () => { state.focus = null; refreshMetrics(); render(); };
+  $('distMetric').onchange = () => { state.focus = null; render(); };
   $('fscale').onchange = () => { state.funnelScale = $('fscale').value; render(); };
   const onLim = () => { try { localStorage.setItem('vt_under_v1', $('limUnder').value); localStorage.setItem('vt_over_v1', $('limOver').value); localStorage.setItem('vt_prorate_v1', $('prorate').checked ? '1' : '0'); } catch (e) {} if (CD.length) renderGauge(F(), currentRange()); };
   $('limUnder').oninput = $('limOver').oninput = $('prorate').onchange = onLim;
