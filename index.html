@@ -212,7 +212,7 @@ details .body ul{margin:4px 0 8px 18px;padding:0}
 
   <div class="card panel" id="pDist">
     <h3>Distribution</h3>
-    <div class="ctl">View by: <select id="viewBy"><option value="campaign">Campaign name</option><option value="channel">Channel</option><option value="day">Date</option><optgroup label="Ad level (Cost / Impressions / Clicks only)"><option value="metaAdsets">Ad set (Meta)</option><option value="googleAdgroups">Ad group (Google)</option><option value="metaAds">Creative / Ad (Meta)</option><option value="metaPlacements">Placement (Meta)</option><option value="googleNetwork">Network (Google)</option></optgroup></select>
+    <div class="ctl">View by: <select id="viewBy"><option value="campaign">Campaign name</option><option value="channel">Channel</option><option value="day">Date</option><optgroup label="Meta ad level (Cost / Impressions / Clicks only)"><option value="metaAdsets">Ad set (Meta)</option><option value="metaAds">Creative / Ad (Meta)</option><option value="metaPlacements">Placement (Meta)</option></optgroup><optgroup label="Google ad level (Cost / Impressions / Clicks only)"><option value="googleAdgroups">Ad group (Google)</option><option value="googleAds">Creative / Ad (Google)</option><option value="googleNetwork">Network (Google)</option></optgroup></select>
       Metric: <select id="distMetric"></select></div>
     <div class="legend cmpLegend hide"><span><i style="background:var(--cur)"></i>Selected period</span><span><i style="background:var(--cmp)"></i>Comparison period</span></div>
     <div class="dscroll" id="dScroll"><div class="dinner" id="dInner"><canvas id="cD"></canvas></div></div>
@@ -549,12 +549,27 @@ const BDV = {
   metaAdsets:     { label: 'Ad set', plural: 'ad sets', channel: 'Meta' },
   googleAdgroups: { label: 'Ad group', plural: 'ad groups', channel: 'Google' },
   metaAds:        { label: 'Creative / Ad', plural: 'ads', channel: 'Meta' },
+  googleAds:      { label: 'Creative / Ad', plural: 'ads', channel: 'Google' },
   metaPlacements: { label: 'Placement', plural: 'placements', channel: 'Meta' },
   googleNetwork:  { label: 'Network', plural: 'networks', channel: 'Google' }
 };
 const BD_KEYS = ['Spend', 'Impressions', 'Clicks', 'CTR', 'CPC', 'CPM'];   // the only metrics these tabs can give
 let BD = {};
 const isBDView = () => !!BDV[$('viewBy').value];
+/* reconciliation line under the chart: range totals + what the tab had that is not in the chart */
+function bdCheckNote(src, curRows, cmpRows) {
+  const sum = rows => rows.reduce((t, r) => t + r.Spend, 0);
+  let t = ' Cost in selected range: ' + money(sum(curRows)) + (cmpRows ? ' (comparison ' + money(sum(cmpRows)) + ')' : '') + '.';
+  const c = src.check;
+  if (c) {
+    const left = [];
+    if (c.spendIgnored) left.push('ignored campaigns ' + money(c.spendIgnored) + ' (' + c.ignoredRows + ' rows)');
+    if (c.spendNoCampaign) left.push('rows without campaign name ' + money(c.spendNoCampaign));
+    if (c.spendNoDay) left.push('rows without a date ' + money(c.spendNoDay));
+    t += ' Whole tab, all dates: ' + money(c.spendTab) + (left.length ? '; left out: ' + left.join(', ') + '.' : ', nothing left out.');
+  }
+  return t;
+}
 function parseBreakdowns(b) {
   const out = {};
   Object.keys(BDV).forEach(k => {
@@ -574,7 +589,7 @@ function parseBreakdowns(b) {
         Spend: Number(r[idx.Spend]) || 0, Impressions: Number(r[idx.Impressions]) || 0, Clicks: Number(r[idx.Clicks]) || 0 });
     });
     DATE_ORDER = saved;
-    out[k] = { rows, sheetName: t.sheetName || '', badDates };
+    out[k] = { rows, sheetName: t.sheetName || '', badDates, check: t.check || null };
   });
   return out;
 }
@@ -879,7 +894,7 @@ function renderDist(cur, cmp, f) {
     $('distNote').textContent = src.error ? src.error
       : !chOK ? V.channel + ' is not in the channel filter – add it to see ' + V.plural + '.'
       : V.label + ' level (' + V.channel + ', tab "' + src.sheetName + '"): ' + keys.length + ' ' + V.plural + (f.camps.size ? ' in the selected campaigns' : '') +
-        '; scroll to see more. Only Cost, Impressions, Clicks, CTR, CPC and CPM exist at this level.' + (src.badDates ? ' ' + src.badDates + ' rows skipped (unreadable date).' : '');
+        '; scroll to see more. Only Cost, Impressions, Clicks, CTR, CPC and CPM exist at this level.' + (src.badDates ? ' ' + src.badDates + ' rows skipped (unreadable date).' : '') + bdCheckNote(src, take(cur), cmp ? take(cmp) : null);
     var tipTitle = i => keys[i] + ' · ' + V.channel;
   } else {
     const isCamp = viewBy === 'campaign', key = isCamp ? 'Campaign' : 'Channel';
