@@ -102,7 +102,19 @@ body{font-family:"Segoe UI",Inter,Arial,sans-serif;background:var(--page);color:
 .fmeta .co{color:var(--cmp-ink)}
 .dscroll{overflow:auto;max-height:360px;border-radius:6px}
 .dinner{position:relative}
-.tw{overflow:auto;max-height:560px}
+.tw{overflow:auto;max-height:620px}
+tr.prow td:first-child{font-weight:700}
+tr.crow td:first-child{padding-left:30px;font-weight:500;color:#344054}
+tr.crow{background:#fcfdff}
+tr.crow td{font-size:11.5px}
+.tog{display:inline-block;width:16px;cursor:pointer;color:var(--muted);font-weight:700;user-select:none}
+.tctl{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;margin-bottom:6px;font-size:11.5px;color:var(--muted)}
+.tctl select{border:1px solid #d5dae3;border-radius:6px;padding:5px 8px;font-size:12px;background:#fff;font-family:inherit;color:var(--ink)}
+.tctl .btn{padding:4px 9px;font-size:11px}
+.est{font-style:italic}
+.est::after{content:" est.";font-size:9px;font-style:normal;color:#8a6d00;font-weight:700}
+.tctl label.chk{display:flex;align-items:center;gap:5px;font-weight:600;color:#5c4a00;background:#fff6e0;border:1px solid #f0c96a;border-radius:6px;padding:4px 8px;cursor:pointer}
+.srcnote{font-size:11px;color:#475467;background:#f4f7fb;border-radius:7px;padding:6px 10px;margin:0 0 8px;text-align:center}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;vertical-align:top}
 th:first-child,td:first-child{text-align:left}
@@ -233,7 +245,16 @@ details .body ul{margin:4px 0 8px 18px;padding:0}
   </div>
 
   <div class="card panel" id="pTable">
-    <h3>Campaign table</h3>
+    <h3 id="tblTitle">Campaign table</h3>
+    <div class="tctl">
+      <label>Rows (higher level) <select id="tLvl1"></select></label>
+      <span style="font-weight:700">›</span>
+      <label>Breakdown (lower level) <select id="tLvl2"></select></label>
+      <button type="button" class="btn" id="tExpand">Expand all</button>
+      <button type="button" class="btn" id="tCollapse">Collapse all</button>
+      <label class="chk" title="Google E-KYC / E-Sign exist only per campaign. Below campaign level they are split by share of installs and marked est."><input type="checkbox" id="gEst"> Estimate Google E-KYC / E-Sign below campaign level</label>
+    </div>
+    <div class="srcnote hide" id="tblSrc"></div>
     <div class="note" style="text-align:center;margin-bottom:6px" id="tblNote">Click a column to sort. Click a row to add or remove that campaign from the selection.</div>
     <div class="tw"><table id="tbl"></table></div>
   </div>
@@ -266,6 +287,11 @@ const DATA_URL ='https://script.google.com/macros/s/AKfycbyMzGwetuUPz0Jklv-xOirQ
 /* Timezone of the Google Sheet. Date cells sent as full timestamps (e.g. 2026-11-04T18:30:00.000Z)
    are converted to this timezone first, so IST midnight is never read as the previous day. */
 const SHEET_TZ = 'Asia/Kolkata';
+/* Google E-KYC / E-Sign exist only per campaign per day (Overall tab). Below campaign level they are ESTIMATED:
+   each campaign-day's E-KYC / E-Sign is split across its ad groups / ads / networks by their share of installs
+   (falls back to clicks, then cost, if a campaign-day has no installs). Estimated values are marked "est.".
+   true = estimates shown when the page opens; the checkbox above the table switches them on/off. */
+const GOOGLE_EST_DEFAULT = true;
 const DEFAULT_PERIOD = 'yesterday';           // 'yesterday' = latest day in the sheet
 /* Ratios are divisions (e.g. Clicks / Impressions).
    'percent' shows them ×100 with a % sign (2.86%); 'decimal' shows the raw result (0.0286). */
@@ -501,7 +527,7 @@ const BASE = ['Spend','Impressions','Clicks','Installs','EKYC','ESign','Leads','
 const div = (a, b) => b ? a / b : null;   // null shows as "—" (no divide-by-zero)
 function agg(rows) {
   const o = {}; BASE.forEach(k => o[k] = 0);
-  rows.forEach(r => BASE.forEach(k => o[k] += Number(r[k] || 0)));
+  rows.forEach(r => BASE.forEach(k => { const v = r[k]; o[k] += (v == null || v === '') ? 0 : Number(v); }));   // NaN = column missing in that tab -> shows "—"
   o.CTR    = div(o.Clicks,   o.Impressions);   // Clicks / Impressions
   o.CPC    = div(o.Spend,    o.Clicks);        // Cost / Clicks
   o.CPM    = o.Impressions ? o.Spend / o.Impressions * 1000 : null;   // Cost / Impressions × 1000
@@ -545,20 +571,51 @@ function delta(a, b, lower) {
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* ---------- ad-level breakdowns (Distribution chart only; sent by the web app as data.breakdowns) ---------- */
-const BDV = {
-  metaAdsets:     { label: 'Ad set', plural: 'ad sets', channel: 'Meta' },
-  googleAdgroups: { label: 'Ad group', plural: 'ad groups', channel: 'Google' },
-  metaAds:        { label: 'Creative / Ad', plural: 'ads', channel: 'Meta' },
-  googleAds:      { label: 'Creative / Ad', plural: 'ads', channel: 'Google' },
-  metaPlacements: { label: 'Placement', plural: 'placements', channel: 'Meta' },
-  googleNetwork:  { label: 'Network', plural: 'networks', channel: 'Google' }
+const BDV = {   // Distribution views built from the two ad-level tabs
+  metaAdsets:     { label: 'Ad set', plural: 'ad sets', channel: 'Meta', field: 'Group' },
+  metaAds:        { label: 'Creative / Ad', plural: 'ads', channel: 'Meta', field: 'Ad' },
+  metaPlacements: { label: 'Placement', plural: 'placements', channel: 'Meta', field: 'Placement' },
+  googleAdgroups: { label: 'Ad group', plural: 'ad groups', channel: 'Google', field: 'Group' },
+  googleAds:      { label: 'Creative / Ad', plural: 'ads', channel: 'Google', field: 'Ad' },
+  googleNetwork:  { label: 'Network', plural: 'networks', channel: 'Google', field: 'Placement' }
 };
-const BD_KEYS = ['Spend', 'Impressions', 'Clicks', 'CTR', 'CPC', 'CPM'];   // the only metrics these tabs can give
+let DETAIL = { Meta: null, Google: null };   // ad-level rows: { Day, Channel, Campaign, Group, Ad, Platform, Placement, Spend, Impressions, Clicks, Installs, EKYC, ESign }
 let BD = {};
 const isBDView = () => !!BDV[$('viewBy').value];
-/* reconciliation line under the chart: range totals + what the tab had that is not in the chart */
+function parseDetail(t, channel) {
+  if (!t) return { error: 'No ' + channel + ' ad-level data in the web app response – paste the new Code.gs and deploy a new version.' };
+  if (t.error) return { error: t.error };
+  const idx = {}; (t.headers || []).forEach((h, i) => idx[String(h).trim()] = i);
+  const has = t.has || {};
+  const saved = DATE_ORDER;
+  DATE_ORDER = detectDateOrder((t.rows || []).map(r => r[idx.Day])).order;
+  const rows = []; let badDates = 0;
+  const n = (r, k, ok) => ok === false ? NaN : (Number(r[idx[k]]) || 0);
+  (t.rows || []).forEach(r => {
+    const d = toISO(r[idx.Day]);
+    if (!d) { badDates++; return; }
+    rows.push({ Day: d, Channel: channel, Campaign: String(r[idx.Campaign]).trim(), Group: String(r[idx.Group]).trim(), Ad: String(r[idx.Ad]).trim(),
+      Platform: String(r[idx.Platform]).trim(), Placement: String(r[idx.Placement]).trim(),
+      Spend: n(r, 'Spend'), Impressions: n(r, 'Impressions'), Clicks: n(r, 'Clicks'),
+      Installs: n(r, 'Installs', has.installs), EKYC: n(r, 'EKYC', has.ekyc), ESign: n(r, 'ESign', has.esign),
+      Leads: NaN, AO: NaN });   // Leads / AO are not in the ad-level tabs
+  });
+  DATE_ORDER = saved;
+  return { rows, sheetName: t.sheetName || '', badDates, check: t.check || null, has };
+}
+function parseBreakdowns(b) {
+  DETAIL = { Meta: null, Google: null };
+  if (!b) { DETAIL.Meta = DETAIL.Google = { error: 'No ad-level data in the web app response yet – paste the new Code.gs and deploy a new version.' }; }
+  else if (b.error) { DETAIL.Meta = DETAIL.Google = { error: b.error }; }
+  else if (!b.meta && !b.google) { DETAIL.Meta = DETAIL.Google = { error: 'The web app sends the old ad-level format – paste the new Code.gs and deploy a new version.' }; }
+  else { DETAIL.Meta = parseDetail(b.meta, 'Meta'); DETAIL.Google = parseDetail(b.google, 'Google'); }
+  const out = {};
+  Object.keys(BDV).forEach(k => { out[k] = DETAIL[BDV[k].channel]; });
+  return out;
+}
+/* reconciliation line under the Distribution chart: range totals + what the tab had that is not in the chart */
 function bdCheckNote(src, curRows, cmpRows) {
-  const sum = rows => rows.reduce((t, r) => t + r.Spend, 0);
+  const sum = rows => rows.reduce((t, r) => t + (Number(r.Spend) || 0), 0);
   let t = ' Cost in selected range: ' + money(sum(curRows)) + (cmpRows ? ' (comparison ' + money(sum(cmpRows)) + ')' : '') + '.';
   const c = src.check;
   if (c) {
@@ -570,29 +627,60 @@ function bdCheckNote(src, curRows, cmpRows) {
   }
   return t;
 }
-function parseBreakdowns(b) {
-  const out = {};
-  Object.keys(BDV).forEach(k => {
-    if (!b) { out[k] = { error: 'No ad-level data in the web app response yet – paste the new Code.gs and redeploy the web app (New version).' }; return; }
-    if (b.error) { out[k] = { error: b.error }; return; }
-    const t = b[k];
-    if (!t) { out[k] = { error: 'Not in the web app response – redeploy the web app with the new Code.gs.' }; return; }
-    if (t.error) { out[k] = { error: t.error }; return; }
-    const idx = {}; (t.headers || []).forEach((h, i) => idx[String(h).trim()] = i);
-    const saved = DATE_ORDER;
-    DATE_ORDER = detectDateOrder((t.rows || []).map(r => r[idx.Day])).order;
-    const rows = []; let badDates = 0;
-    (t.rows || []).forEach(r => {
-      const d = toISO(r[idx.Day]);
-      if (!d) { badDates++; return; }
-      rows.push({ Day: d, Campaign: String(r[idx.Campaign]).trim(), Item: String(r[idx.Item]).trim(),
-        Spend: Number(r[idx.Spend]) || 0, Impressions: Number(r[idx.Impressions]) || 0, Clicks: Number(r[idx.Clicks]) || 0 });
-    });
-    DATE_ORDER = saved;
-    out[k] = { rows, sheetName: t.sheetName || '', badDates, check: t.check || null };
+/* ad-level rows for a date range with the top filters applied */
+function detailPick(range, f) {
+  const out = [];
+  ['Meta', 'Google'].forEach(ch => {
+    const d = DETAIL[ch];
+    if (!d || d.error || (f.chans.size && !f.chans.has(ch))) return;
+    d.rows.forEach(r => { if (inR(r.Day, range) && (!f.camps.size || f.camps.has(r.Campaign))) out.push(r); });
   });
   return out;
 }
+/* ---------- Google E-KYC / E-Sign estimates (campaign-day totals from Overall, split by share of installs) ---------- */
+const EST_KEYS = ['EKYC', 'I2K', 'K_CAC', 'ESign', 'K2S', 'S_CAC'];
+let GEST = null;   // { campDays, matched, unmatched, EKYC: {overall, allocated}, ESign: {...}, unmatchedSamples }
+function allocGoogleEst(mainRows) {
+  GEST = null;
+  const d = DETAIL.Google;
+  if (!d || d.error) return;
+  const needEK = !d.has.ekyc, needES = !d.has.esign;
+  if (!needEK && !needES) return;                                   // the tab has real values: nothing to estimate
+  const tot = {};                                                   // Overall: Google E-KYC / E-Sign per Day|Campaign
+  mainRows.forEach(r => { if (r.Channel !== 'Google') return; const k = r.Day + '|' + r.Campaign; const t = tot[k] || (tot[k] = { EKYC: 0, ESign: 0 }); t.EKYC += r.EKYC || 0; t.ESign += r.ESign || 0; });
+  const grp = {};
+  d.rows.forEach(r => { (grp[r.Day + '|' + r.Campaign] = grp[r.Day + '|' + r.Campaign] || []).push(r); });
+  const S = { campDays: 0, matched: 0, unmatched: 0, unmatchedSamples: [], EKYC: { overall: 0, allocated: 0 }, ESign: { overall: 0, allocated: 0 } };
+  Object.keys(tot).forEach(k => { S.EKYC.overall += tot[k].EKYC; S.ESign.overall += tot[k].ESign; });
+  Object.keys(grp).forEach(k => {
+    const rows = grp[k], t = tot[k];
+    S.campDays++;
+    rows.forEach(r => { r.EKYC_est = 0; r.ESign_est = 0; });
+    if (!t) { S.unmatched++; if (S.unmatchedSamples.length < 4) S.unmatchedSamples.push(lblFull(rows[0].Day) + ' · ' + rows[0].Campaign); return; }
+    S.matched++;
+    const base = ['Installs', 'Clicks', 'Spend'].find(f => rows.reduce((a, r) => a + (Number(r[f]) || 0), 0) > 0);
+    if (!base) return;                                              // no installs, clicks or cost on any row: cannot split
+    const sum = rows.reduce((a, r) => a + (Number(r[base]) || 0), 0);
+    rows.forEach(r => { const w = (Number(r[base]) || 0) / sum; r.EKYC_est = t.EKYC * w; r.ESign_est = t.ESign * w; });
+    S.EKYC.allocated += t.EKYC; S.ESign.allocated += t.ESign;
+  });
+  S.needEK = needEK; S.needES = needES;
+  GEST = S;
+  applyGoogleEst();
+}
+function applyGoogleEst() {
+  const d = DETAIL.Google; if (!d || d.error || !GEST) return;
+  const on = $('gEst').checked;
+  d.rows.forEach(r => {
+    r.est = on;
+    if (GEST.needEK) r.EKYC = on ? r.EKYC_est : NaN;
+    if (GEST.needES) r.ESign = on ? r.ESign_est : NaN;
+  });
+}
+const hasEst = rows => !!(rows && rows.some(r => r.est));
+
+/* metrics the ad-level tabs can give (no Leads / AO) */
+const BD_KEYS = ['Spend', 'Impressions', 'Clicks', 'CTR', 'CPC', 'CPM', 'Installs', 'CPI', 'C2I', 'EKYC', 'I2K', 'K_CAC', 'ESign', 'K2S', 'S_CAC'];
 
 /* ---------- metric catalogue: [label, key, format, lowerIsBetter, formula] ---------- */
 const ALL_METRICS = [   // [label, key, format, lowerIsBetter, formula, flag, group]
@@ -630,7 +718,7 @@ function refreshMetrics() {
     list.forEach(m => { const o = document.createElement('option'); o.value = m[1]; o.textContent = m[0]; sel.appendChild(o); });
     sel.value = list.some(m => m[1] === cur) ? cur : (id === 'tmM' ? 'ESign' : 'Spend');
   });
-  if (!METRICS.some(m => m[1] === state.sortKey) && state.sortKey !== 'Campaign' && state.sortKey !== 'Channel') state.sortKey = 'Spend';
+  if (!METRICS.some(m => m[1] === state.sortKey) && state.sortKey !== 'Name' && state.sortKey !== 'Channel') state.sortKey = 'Spend';
   if (state.focus && !METRICS.some(m => m[1] === state.focus)) state.focus = null;
 }
 const mDef = key => ALL_METRICS.find(m => m[1] === key) || ALL_METRICS[0];
@@ -880,10 +968,10 @@ function renderDist(cur, cmp, f) {
     $('distNote').textContent = (cur[0] === cur[1] ? 'Showing the 7 days to ' + lblFull(cur[1]) + '. ' : '') + 'Click a bar to filter to that day.' + (cmp ? ' Comparison days are lined up day 1 vs day 1.' : '');
     var tipTitle = i => (cd[i] ? 'Selected ' + lblFull(cd[i]) : '') + (pd && pd[i] ? (cd[i] ? ' · ' : '') + 'Comparison ' + lblFull(pd[i]) : '');
   } else if (BDV[viewBy]) {
-    const V = BDV[viewBy], src = BD[viewBy] || { error: 'No ad-level data loaded.' };
+    const V = BDV[viewBy], src = BD[viewBy] || { error: 'No ad-level data loaded.' }, FLD = V.field;
     const chOK = !f.chans.size || f.chans.has(V.channel);
     const take = rng => (src.rows || []).filter(r => inR(r.Day, rng) && (!f.camps.size || f.camps.has(r.Campaign)));
-    const cg = chOK ? groupBy(take(cur), 'Item') : {}, pg = cmp && chOK ? groupBy(take(cmp), 'Item') : {};
+    const cg = chOK ? groupBy(take(cur), FLD) : {}, pg = cmp && chOK ? groupBy(take(cmp), FLD) : {};
     const items = [...new Set(Object.keys(cg).concat(Object.keys(pg)))]
       .map(k => ({ k, a: agg(cg[k] || [])[mk], b: cmp ? agg(pg[k] || [])[mk] : null }))
       .filter(x => !bad(x.a) || !bad(x.b))
@@ -894,7 +982,7 @@ function renderDist(cur, cmp, f) {
     $('distNote').textContent = src.error ? src.error
       : !chOK ? V.channel + ' is not in the channel filter – add it to see ' + V.plural + '.'
       : V.label + ' level (' + V.channel + ', tab "' + src.sheetName + '"): ' + keys.length + ' ' + V.plural + (f.camps.size ? ' in the selected campaigns' : '') +
-        '; scroll to see more. Only Cost, Impressions, Clicks, CTR, CPC and CPM exist at this level.' + (src.badDates ? ' ' + src.badDates + ' rows skipped (unreadable date).' : '') + bdCheckNote(src, take(cur), cmp ? take(cmp) : null);
+        '; scroll to see more. Leads / AO are not available at this level.' + (V.channel === 'Google' && GEST && $('gEst').checked ? ' Google E-KYC / E-Sign here are estimates (campaign totals split by share of installs).' : '') + (src.badDates ? ' ' + src.badDates + ' rows skipped (unreadable date).' : '') + bdCheckNote(src, take(cur), cmp ? take(cmp) : null);
     var tipTitle = i => keys[i] + ' · ' + V.channel;
   } else {
     const isCamp = viewBy === 'campaign', key = isCamp ? 'Campaign' : 'Channel';
@@ -981,35 +1069,108 @@ function renderGauge(f, cur) {
     ' Monthly limits ' + money(U) + ' – ' + money(O) + (pr ? ', pro-rated to ' + dayN + ' of ' + dim + ' days.' : ' (not pro-rated).');
 }
 
+/* ---------- bottom table: Rows (higher level) › Breakdown (lower level) ---------- */
+const TLEVELS = [   // [key, label, ad-level only]
+  ['Campaign',  'Campaign', false],
+  ['Channel',   'Channel', false],
+  ['Group',     'Ad set (Meta) / Ad group (Google)', true],
+  ['Ad',        'Creative / Ad', true],
+  ['Platform',  'Platform (Meta: Facebook, Instagram …)', true],
+  ['Placement', 'Placement (Meta) / Network (Google)', true]
+];
+const TSHORT = { Campaign: 'Campaign', Channel: 'Channel', Group: 'Ad set / Ad group', Ad: 'Creative / Ad', Platform: 'Platform', Placement: 'Placement / Network' };
+const tblOpen = new Set(); let tblAllOpen = true;
+function fillLevelSelects() {
+  const a = $('tLvl1'), b = $('tLvl2'), v1 = a.value || 'Campaign', v2 = b.value || 'none';
+  a.innerHTML = TLEVELS.map(l => '<option value="' + l[0] + '">' + l[1] + '</option>').join('');
+  a.value = v1;
+  b.innerHTML = '<option value="none">— none (flat table) —</option>' + TLEVELS.filter(l => l[0] !== a.value).map(l => '<option value="' + l[0] + '">' + l[1] + '</option>').join('');
+  b.value = [...b.options].some(o => o.value === v2) ? v2 : 'none';
+}
 function renderTable(cur, cmp, f) {
-  const COLS = [['Campaign', null, null], ['Channel', null, null]].concat(METRICS.map(m => [m[0], m[1], m[2]]));
-  const cg = groupBy(pick(cur, f), 'Campaign'), pg = cmp ? groupBy(pick(cmp, f), 'Campaign') : {};
-  const names = [...new Set(Object.keys(cg).concat(Object.keys(pg)))];
-  const list = names.map(k => ({ k, ch: [...new Set((cg[k] || []).concat(pg[k] || []).map(r => r.Channel))].join(', '), a: agg(cg[k] || []), b: cmp ? agg(pg[k] || []) : null }));
-  const sk = state.sortKey, sd = state.sortDir;
-  list.sort((x, y) => {
-    if (sk === 'Campaign') return sd * x.k.localeCompare(y.k);
-    if (sk === 'Channel') return sd * x.ch.localeCompare(y.ch);
-    const xv = x.a[sk], yv = y.a[sk];
-    return sd * ((bad(xv) ? -Infinity : xv) - (bad(yv) ? -Infinity : yv));
-  });
-  const tot = agg(pick(cur, f)), ptot = cmp ? agg(pick(cmp, f)) : null;
-  const cell = (c, a, b) => '<td><div class="c1">' + FMT[c[2]](a[c[1]]) + '</div>' + (b ? '<div class="c2">' + FMT[c[2]](b[c[1]]) + '</div>' : '') + '</td>';
+  const L1 = $('tLvl1').value || 'Campaign', L2 = $('tLvl2').value === 'none' ? null : $('tLvl2').value;
+  const adLevel = TLEVELS.some(l => l[2] && (l[0] === L1 || l[0] === L2));
+  const getRows = rng => adLevel ? detailPick(rng, f) : pick(rng, f);
+  const curRows = getRows(cur), cmpRows = cmp ? getRows(cmp) : null;
+  const MET = adLevel ? METRICS.filter(m => BD_KEYS.includes(m[1])) : METRICS;
+  const COLS = [[TSHORT[L1] + (L2 ? ' › ' + TSHORT[L2] : ''), 'Name', null], ['Channel', null, null]].concat(MET.map(m => [m[0], m[1], m[2]]));
+  const sk = MET.some(m => m[1] === state.sortKey) || state.sortKey === 'Name' || state.sortKey === 'Channel' ? state.sortKey : 'Spend', sd = state.sortDir;
+  const build = (cRows, pRows, key) => {
+    const cg = groupBy(cRows, key), pg = pRows ? groupBy(pRows, key) : {};
+    const list = [...new Set(Object.keys(cg).concat(Object.keys(pg)))].map(k => ({ k,
+      ch: [...new Set((cg[k] || []).concat(pg[k] || []).map(r => r.Channel))].join(', '),
+      a: agg(cg[k] || []), b: pRows ? agg(pg[k] || []) : null, cr: cg[k] || [], pr: pg[k] || [] }));
+    list.sort((x, y) => {
+      if (sk === 'Name') return sd * x.k.localeCompare(y.k);
+      if (sk === 'Channel') return sd * x.ch.localeCompare(y.ch);
+      const xv = x.a[sk], yv = y.a[sk];
+      return sd * ((bad(xv) ? -Infinity : xv) - (bad(yv) ? -Infinity : yv));
+    });
+    return list;
+  };
+  const parents = build(curRows, cmpRows, L1);
+  if (L2) parents.forEach(p => { p.kids = build(p.cr, cmpRows ? p.pr : null, L2); });
+  const tot = agg(curRows), ptot = cmp ? agg(cmpRows) : null;
+  const cell = (c, a, b, ea, eb) => {
+    const e = EST_KEYS.includes(c[1]), ca = e && ea && !bad(a[c[1]]) ? ' est' : '', cb = e && eb && b && !bad(b[c[1]]) ? ' est' : '';
+    return '<td><div class="c1' + ca + '">' + FMT[c[2]](a[c[1]]) + '</div>' + (b ? '<div class="c2' + cb + '">' + FMT[c[2]](b[c[1]]) + '</div>' : '') + '</td>';
+  };
+  const isOpen = k => tblAllOpen ? !tblOpen.has(k) : tblOpen.has(k);   // tblOpen holds the exceptions
   let h = '<thead><tr>' + COLS.map(c => { const k = c[1] || c[0]; return '<th data-k="' + k + '" class="' + (k === sk ? 'sorted' : '') + '">' + c[0] + (k === sk ? (sd < 0 ? ' ▼' : ' ▲') : '') + '</th>'; }).join('') + '</tr></thead><tbody>';
-  list.forEach(x => {
-    h += '<tr class="row' + (f.camps.has(x.k) ? ' sel' : '') + '" data-c="' + esc(x.k) + '"><td title="' + esc(x.k) + '">' + esc(x.k) + '</td><td><span class="seg">' + esc(x.ch) + '</span></td>' +
-      COLS.slice(2).map(c => cell(c, x.a, x.b)).join('') + '</tr>';
+  parents.forEach(p => {
+    const open = L2 && isOpen(p.k);
+    const selectable = L1 === 'Campaign' || L1 === 'Channel';
+    const sel = (L1 === 'Campaign' && f.camps.has(p.k)) || (L1 === 'Channel' && f.chans.has(p.k));
+    h += '<tr class="row prow' + (sel ? ' sel' : '') + '" data-lvl="' + L1 + '" data-c="' + esc(p.k) + '"' + (selectable ? '' : ' style="cursor:default"') + '><td title="' + esc(p.k) + '">' +
+      (L2 ? '<span class="tog" data-t="' + esc(p.k) + '">' + (open ? '▾' : '▸') + '</span>' : '') + esc(p.k) + (L2 ? ' <span class="note">(' + p.kids.length + ')</span>' : '') +
+      '</td><td><span class="seg">' + esc(p.ch) + '</span></td>' + COLS.slice(2).map(c => cell(c, p.a, p.b, hasEst(p.cr), hasEst(p.pr))).join('') + '</tr>';
+    if (open) p.kids.forEach(x => {
+      h += '<tr class="row crow" data-lvl="' + L2 + '" data-c="' + esc(x.k) + '"' + (L2 === 'Campaign' || L2 === 'Channel' ? '' : ' style="cursor:default"') + '><td title="' + esc(x.k) + '">' + esc(x.k) + '</td><td><span class="seg">' + esc(x.ch) + '</span></td>' +
+        COLS.slice(2).map(c => cell(c, x.a, x.b, hasEst(x.cr), hasEst(x.pr))).join('') + '</tr>';
+    });
   });
-  h += '</tbody><tfoot><tr><td>Total (' + list.length + ' campaigns)</td><td></td>' + COLS.slice(2).map(c => cell(c, tot, ptot)).join('') + '</tr></tfoot>';
+  h += '</tbody><tfoot><tr><td>Total (' + parents.length + ' ' + TSHORT[L1].toLowerCase() + (parents.length === 1 ? '' : 's') + ')</td><td></td>' + COLS.slice(2).map(c => cell(c, tot, ptot, hasEst(curRows), hasEst(cmpRows))).join('') + '</tr></tfoot>';
   $('tbl').innerHTML = h;
   $('tbl').classList.toggle('cmpmode', !!cmp);
+  $('tblTitle').textContent = TSHORT[L1] + (L2 ? ' › ' + TSHORT[L2] : '') + ' table';
+  $('tExpand').classList.toggle('hide', !L2); $('tCollapse').classList.toggle('hide', !L2);
+
+  /* where the numbers come from */
+  const srcEl = $('tblSrc');
+  if (adLevel) {
+    const errs = ['Meta', 'Google'].filter(ch => (!f.chans.size || f.chans.has(ch)) && DETAIL[ch] && DETAIL[ch].error).map(ch => ch + ': ' + DETAIL[ch].error);
+    const miss = [];
+    ['Meta', 'Google'].forEach(ch => { const d = DETAIL[ch]; if (d && !d.error && (!f.chans.size || f.chans.has(ch))) {
+      const m = ['installs', 'ekyc', 'esign'].filter(x => !d.has[x]).map(x => ({ installs: 'Installs', ekyc: 'E-KYC', esign: 'E-Sign' })[x]);
+      const est = ch === 'Google' && GEST && $('gEst').checked;
+      const m2 = est ? m.filter(x => x === 'Installs') : m;
+      if (m2.length) miss.push(ch + ' tab has no ' + m2.join(' / ') + ' column (shown as “—”)'); } });
+    const showEst = GEST && $('gEst').checked && (!f.chans.size || f.chans.has('Google'));
+    if (showEst) miss.push('<i>Google E-KYC / E-Sign marked <b>est.</b> are estimates</i>: each campaign-day’s real total from Overall is split across its ad groups / ads / networks by share of installs (or clicks / cost if a day has no installs). Campaign totals stay exact; the split below them is a guess, not reported data. All dates: ' + num(GEST.ESign.allocated) + ' of ' + num(GEST.ESign.overall) + ' Overall Google E-Signs and ' + num(GEST.EKYC.allocated) + ' of ' + num(GEST.EKYC.overall) + ' E-KYCs could be split' +
+      (GEST.unmatched ? '. ' + GEST.unmatched + ' Google campaign-day(s) in “' + esc(DETAIL.Google.sheetName) + '” have no matching campaign in Overall, so get no estimate (e.g. ' + GEST.unmatchedSamples.map(esc).join('; ') + ')' : ''));
+    const ovr = agg(pick(cur, f)).Spend;
+    srcEl.innerHTML = '<b>Ad-level data</b> from “' + esc((DETAIL.Meta && DETAIL.Meta.sheetName) || 'META Placements') + '” (Meta) and “' + esc((DETAIL.Google && DETAIL.Google.sheetName) || 'GOOGLE Networks') + '” (Google). ' +
+      'Leads / AO columns are hidden because these tabs don’t have them. Cost here ' + money(tot.Spend) + ' vs Overall ' + money(ovr) + ' for the same filters' +
+      (Math.abs(tot.Spend - ovr) > 1 ? ' (difference ' + (tot.Spend > ovr ? '+' : '−') + money(Math.abs(tot.Spend - ovr)) + ': the Adveronix tabs and the Overall tab come from different exports).' : '.') +
+      (miss.length ? '<br>' + miss.join(' · ') + '.' : '') + (errs.length ? '<br><b style="color:var(--neg)">' + errs.map(esc).join(' · ') + '</b>' : '');
+    srcEl.classList.remove('hide');
+  } else srcEl.classList.add('hide');
+
   $('tblNote').innerHTML = (cmp ? '<span style="color:#0f6fd6;font-weight:700">Blue = selected period</span> · <span style="color:var(--cmp-ink);font-weight:700">Orange = comparison period</span>. ' : '') +
-    'Click a column to sort. Click a row to add or remove that campaign from the selection. Scroll sideways for more columns.';
+    'Click a column to sort' + (L2 ? ', ▸ / ▾ to open or close a group' : '') + '. Click a campaign or channel row to add or remove it from the selection. Scroll sideways for more columns.';
   $('tbl').querySelectorAll('th[data-k]').forEach(th => th.onclick = () => {
-    const k = th.dataset.k; if (state.sortKey === k) state.sortDir *= -1; else { state.sortKey = k; state.sortDir = (k === 'Campaign' || k === 'Channel') ? 1 : -1; }
+    const k = th.dataset.k; if (state.sortKey === k) state.sortDir *= -1; else { state.sortKey = k; state.sortDir = (k === 'Name' || k === 'Channel') ? 1 : -1; }
     renderTable(cur, cmp, f);
   });
-  $('tbl').querySelectorAll('tr.row').forEach(tr => tr.onclick = () => toggleCamp(tr.dataset.c));
+  $('tbl').querySelectorAll('.tog').forEach(t => t.onclick = e => {
+    e.stopPropagation(); const k = t.dataset.t;
+    if (tblOpen.has(k)) tblOpen.delete(k); else tblOpen.add(k);
+    renderTable(cur, cmp, f);
+  });
+  $('tbl').querySelectorAll('tr.row').forEach(tr => tr.onclick = () => {
+    const lvl = tr.dataset.lvl, c = tr.dataset.c;
+    if (lvl === 'Campaign') toggleCamp(c); else if (lvl === 'Channel') toggleChan(c);
+  });
 }
 
 function secondNote() {
@@ -1110,6 +1271,7 @@ async function loadSharedData() {
     if (data.second && Array.isArray(data.second.headers) && Array.isArray(data.second.rows)) mergeSecond(model, data.second, 'Google Sheets (' + (data.second.sheetName || 'sheet') + ', Leads / AO file)');
     else if (data.second && data.second.error) model.meta.second = { error: 'Leads / AO file: ' + data.second.error };
     BD = parseBreakdowns(data.breakdowns);
+    allocGoogleEst(model.rows);
     installModel(model, src, CD.length > 0);
     const stamp = data.updatedAt ? new Date(data.updatedAt).toLocaleString() : new Date().toLocaleString();
     showMsg('ok', '<b>Data loaded.</b> ' + num(model.meta.rows) + ' rows · ' + num(model.meta.campaigns) + ' campaigns · ' + lblFull(model.meta.dateMin) + ' to ' + lblFull(model.meta.dateMax) + '. Last fetched: ' + esc(stamp) + '. Click “Refresh data” after the sheet changes.');
@@ -1153,6 +1315,13 @@ async function loadSharedData() {
   $('fscale').onchange = () => { state.funnelScale = $('fscale').value; render(); };
   const onLim = () => { try { localStorage.setItem('vt_under_v1', $('limUnder').value); localStorage.setItem('vt_over_v1', $('limOver').value); localStorage.setItem('vt_prorate_v1', $('prorate').checked ? '1' : '0'); } catch (e) {} if (CD.length) renderGauge(F(), currentRange()); };
   $('limUnder').oninput = $('limOver').oninput = $('prorate').onchange = onLim;
+  fillLevelSelects();
+  $('gEst').checked = GOOGLE_EST_DEFAULT;
+  $('gEst').onchange = () => { applyGoogleEst(); if (CD.length) render(); };
+  $('tLvl1').onchange = () => { fillLevelSelects(); tblOpen.clear(); tblAllOpen = true; if (CD.length) render(); };
+  $('tLvl2').onchange = () => { tblOpen.clear(); tblAllOpen = true; if (CD.length) render(); };
+  $('tExpand').onclick = () => { tblOpen.clear(); tblAllOpen = true; if (CD.length) render(); };
+  $('tCollapse').onclick = () => { tblOpen.clear(); tblAllOpen = false; if (CD.length) render(); };
   $('reset').onclick = resetAll;
   $('btnRefresh').onclick = loadSharedData;
   syncRangeInputs();
